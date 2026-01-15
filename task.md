@@ -1,0 +1,26 @@
+# ECPay POS Integration Task List
+
+- [x] Analyze Documentation and Requirements
+  - [x] Review files in `docs` directory
+  - [x] Analyze ECPay Developer Docs (Web)
+  - [x] Define RS232 Protocol Specs (Command/Response format)
+- [x] Design Architecture
+  - [x] Create `implementation_plan.md`
+  - [x] Define Go Server API (HTTP/WebSocket) for Web App
+  - [x] Define internal Go structure for Serial Port communication
+  - [x] Define Web App UI flow
+- [x] Implement Go Server
+  - [x] Setup Go project
+  - [x] Implement Serial Port Manager (RS232 connection)
+  - [x] Implement ECPay Protocol Layer (Construct/Parse packets)
+  - [x] Implement HTTP/WebSocket Server
+  - [x] Integrate Logic and Build
+- [x] Implement Web App
+  - [x] Setup Frontend Project (React/Vite)
+  - [x] Install Dependencies & Setup Tailwind
+  - [x] Create UI for Payment (Amount input, Trigger)
+  - [x] Create UI for Refund
+  - [x] Connect Frontend to Backend API
+- [x] Verification
+  - [x] Create Walkthrough
+  - [x] Manual Testing Plan
