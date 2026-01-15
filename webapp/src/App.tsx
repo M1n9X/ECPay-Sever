@@ -1,0 +1,207 @@
+import { useState } from "react";
+import { usePOS } from "./hooks/usePOS";
+import { Keypad } from "./components/Keypad";
+import {
+  CreditCard,
+  RefreshCw,
+  Terminal,
+  CheckCircle2,
+  RotateCcw,
+  AlertTriangle,
+} from "lucide-react";
+import { clsx } from "clsx";
+
+function App() {
+  const { connected, status, message, lastResult, sendCommand, reset } =
+    usePOS();
+  const [tab, setTab] = useState<"SALE" | "REFUND">("SALE");
+  const [amount, setAmount] = useState("");
+  const [orderNo, setOrderNo] = useState("");
+
+  const handleInput = (val: string) => {
+    if (amount.length > 8) return;
+    setAmount((prev) => prev + val);
+  };
+
+  const handleClear = () => setAmount("");
+  const handleDelete = () => setAmount((prev) => prev.slice(0, -1));
+
+  const handleCheckout = () => {
+    if (!amount || parseInt(amount) === 0) return;
+    sendCommand(tab, amount, tab === "REFUND" ? orderNo : undefined);
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 selection:bg-primary/30">
+      {/* Header */}
+      <div className="fixed top-6 left-6 flex items-center gap-3 bg-surface px-4 py-2 rounded-full border border-zinc-800 shadow-xl">
+        <div
+          className={clsx(
+            "w-2.5 h-2.5 rounded-full animate-pulse",
+            connected ? "bg-success" : "bg-error"
+          )}
+        ></div>
+        <span className="text-sm font-medium text-zinc-400">
+          {connected ? "POS Online" : "Disconnected"}
+        </span>
+      </div>
+
+      <div className="max-w-md w-full relative">
+        {/* Main Card */}
+        <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden">
+          {/* Background Gradient */}
+          <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/10 to-transparent pointer-events-none" />
+
+          {/* Title */}
+          <div className="flex items-center justify-between mb-8 relative z-10">
+            <div>
+              <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
+                ECPay POS
+              </h1>
+              <p className="text-zinc-500 text-sm">RS232 Integrated Terminal</p>
+            </div>
+            <Terminal className="text-blue-500 w-8 h-8 opacity-80" />
+          </div>
+
+          {/* Tabs */}
+          <div className="flex p-1 bg-surface rounded-xl mb-8 border border-zinc-800">
+            <button
+              onClick={() => setTab("SALE")}
+              className={clsx(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
+                tab === "SALE"
+                  ? "bg-zinc-800 text-white shadow-lg"
+                  : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              <CreditCard className="w-4 h-4" />
+              Sale
+            </button>
+            <button
+              onClick={() => setTab("REFUND")}
+              className={clsx(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
+                tab === "REFUND"
+                  ? "bg-zinc-800 text-white shadow-lg"
+                  : "text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              <RotateCcw className="w-4 h-4" />
+              Refund
+            </button>
+          </div>
+
+          {/* Refresh/Refund Input */}
+          {tab === "REFUND" && (
+            <div className="mb-4">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">
+                Original Order No
+              </label>
+              <input
+                type="text"
+                value={orderNo}
+                onChange={(e) => setOrderNo(e.target.value)}
+                placeholder="Enter 20-digit Order No"
+                className="w-full mt-2 bg-surface border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm"
+              />
+            </div>
+          )}
+
+          {/* Keypad or Status */}
+          <Keypad
+            onInput={handleInput}
+            onClear={handleClear}
+            onDelete={handleDelete}
+            amount={amount}
+          />
+
+          {/* Action Button */}
+          <button
+            onClick={handleCheckout}
+            disabled={!connected || !amount || (tab === "REFUND" && !orderNo)}
+            className="w-full mt-6 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-lg shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
+          >
+            {tab === "SALE" ? "Charge" : "Refund"} $
+            {(parseInt(amount || "0") / 100).toFixed(2)}
+          </button>
+        </div>
+      </div>
+
+      {/* Status Overlay Modal */}
+      {status !== "IDLE" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center">
+            {status === "PROCESSING" && (
+              <>
+                <div className="w-16 h-16 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin mb-6" />
+                <h3 className="text-xl font-bold mb-2">Processing</h3>
+                <p className="text-zinc-400">{message}</p>
+              </>
+            )}
+
+            {status === "SUCCESS" && (
+              <>
+                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 mb-6 animate-in zoom-in duration-300">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Approved</h3>
+                <p className="text-zinc-400 mb-6">
+                  Auth Code:{" "}
+                  <span className="text-white font-mono bg-zinc-800 px-2 py-1 rounded">
+                    {lastResult?.ApprovalNo}
+                  </span>
+                </p>
+
+                <div className="w-full bg-surface rounded-xl p-4 text-left space-y-2 mb-6 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Amount</span>
+                    <span className="font-mono">
+                      ${(parseInt(lastResult?.Amount || "0") / 100).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Order No</span>
+                    <span className="font-mono text-xs">
+                      {lastResult?.OrderNo}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Card</span>
+                    <span className="font-mono text-xs">
+                      {lastResult?.CardNo}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={reset}
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </>
+            )}
+
+            {status === "FAIL" && (
+              <>
+                <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 mb-6 animate-in zoom-in duration-300">
+                  <AlertTriangle className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Transaction Failed</h3>
+                <p className="text-red-400 mb-6">{message}</p>
+                <button
+                  onClick={reset}
+                  className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
+                >
+                  Dismiss
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
