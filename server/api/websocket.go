@@ -92,6 +92,13 @@ func (h *Handler) handleRequest(conn *websocket.Conn, req WebRequest) {
 		ecpayReq.HostID = "01"
 		ecpayReq.Amount = req.Amount
 		ecpayReq.OrderNo = req.OrderNo
+	case "SETTLEMENT":
+		ecpayReq.TransType = "50"
+		ecpayReq.HostID = "01"
+		ecpayReq.Amount = "0" // Must be zero for settlement
+	case "ECHO":
+		ecpayReq.TransType = "80"
+		ecpayReq.HostID = "01"
 	default:
 		h.sendJSON(conn, "error", "Unknown Command", nil)
 		return

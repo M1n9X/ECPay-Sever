@@ -37,12 +37,14 @@ func ParseResponse(packet []byte) map[string]string {
 		"Amount":     readField(31, 12),
 		"TransDate":  readField(43, 6),
 		"TransTime":  readField(49, 6),
-		"ApprovalNo": readField(55, 6),  // 授权码
-		"RespCode":   readField(61, 4),  // 0000 = Success
-		"TerminalID": readField(65, 8),  // 终端机号
-		"MerchantID": readField(73, 15), // 商店代号
-		"OrderNo":    readField(88, 20), // 绿界单号 (EC Order No) or Host Order No depending on context
-		"CardNo":     readField(10, 19), // 掩码卡号
+		"ApprovalNo": readField(55, 6),   // 授权码
+		"RespCode":   readField(61, 4),   // 0000 = Success
+		"TerminalID": readField(65, 8),   // 终端机号
+		"MerchantID": readField(73, 15),  // 商店代号
+		"OrderNo":    readField(88, 20),  // 绿界单号
+		"StoreID":    readField(108, 18), // 柜号
+		"CardType":   readField(126, 2),  // 卡片代码: 00=VISA, 01=MC, 02=JCB, 03=CUP
+		"CardNo":     readField(10, 19),  // 掩码卡号
 	}
 }
 
