@@ -1,23 +1,17 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+/**
+ * usePOS - WebSocket Communication Hook
+ *
+ * This hook handles only WebSocket communication with the server.
+ * State management is delegated to useAppState.
+ */
 
-export type TransactionStatus = "IDLE" | "PROCESSING" | "SUCCESS" | "FAIL";
-
-// Server state from the state machine
-export interface ServerState {
-  state: string;
-  message: string;
-  started_at?: string;
-  elapsed_ms: number;
-  timeout_ms?: number;
-  last_error?: string;
-  trans_type?: string;
-  amount?: string;
-  is_connected: boolean;
-}
+import { useEffect, useRef, useCallback, useState } from "react";
+import type { ServerStateString, TransactionResult } from "./useAppState";
 
 export interface POSResponse {
   status: "processing" | "success" | "error" | "status_update";
   message: string;
+  command_type?: "transaction" | "control" | "status";
   data?: {
     TransType?: string;
     Amount?: string;
@@ -26,7 +20,6 @@ export interface POSResponse {
     OrderNo?: string;
     CardNo?: string;
     RespCode?: string;
-    // Server state fields
     state?: string;
     is_connected?: boolean;
     elapsed_ms?: number;
@@ -35,88 +28,107 @@ export interface POSResponse {
   };
 }
 
-export const usePOS = () => {
-  const [status, setStatus] = useState<TransactionStatus>("IDLE");
-  const [message, setMessage] = useState<string>("");
-  const [lastResult, setLastResult] = useState<POSResponse["data"] | null>(
-    null
-  );
-  const [connected, setConnected] = useState(false);
-  const [serverState, setServerState] = useState<ServerState | null>(null);
+export interface POSCallbacks {
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onServerStateUpdate: (
+    state: ServerStateString,
+    message: string,
+    elapsed_ms: number,
+    timeout_ms?: number
+  ) => void;
+  onTransactionSuccess: (result: TransactionResult) => void;
+  onTransactionError: (error: string, result?: TransactionResult) => void;
+}
 
+export function usePOS(callbacks: POSCallbacks) {
   const ws = useRef<WebSocket | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
 
+  const addLog = useCallback((msg: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs((prev) => [...prev.slice(-49), `[${timestamp}] ${msg}`]);
+  }, []);
+
+  // Connect to WebSocket
   useEffect(() => {
-    // Connect to Go Server
     const socket = new WebSocket("ws://localhost:8989/ws");
 
     socket.onopen = () => {
       console.log("Connected to POS Server");
-      setConnected(true);
+      addLog("Connected to POS Server");
+      callbacks.onConnect();
     };
 
     socket.onclose = () => {
       console.log("Disconnected from POS Server");
-      setConnected(false);
-      setServerState(null);
+      addLog("Disconnected from POS Server");
+      callbacks.onDisconnect();
+    };
+
+    socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      addLog("WebSocket error");
     };
 
     socket.onmessage = (event) => {
       try {
         const resp: POSResponse = JSON.parse(event.data);
         console.log("Received:", resp);
+        addLog(`[${resp.status}] ${resp.message}`);
 
-        setMessage(resp.message);
-
+        // Handle different response types
         switch (resp.status) {
           case "status_update":
-            // Update server state from broadcast
             if (resp.data) {
-              const newState: ServerState = {
-                state: resp.data.state || "IDLE",
-                message: resp.message,
-                elapsed_ms: resp.data.elapsed_ms || 0,
-                timeout_ms: resp.data.timeout_ms,
-                is_connected: resp.data.is_connected ?? true,
-              };
-              setServerState(newState);
-
-              // Update connection status
-              if (resp.data.is_connected !== undefined) {
-                setConnected(resp.data.is_connected);
-              }
-
-              // Update UI status based on server state
-              if (newState.state === "IDLE") {
-                setStatus("IDLE");
-              } else if (newState.state === "SUCCESS") {
-                setStatus("SUCCESS");
-              } else if (
-                newState.state === "ERROR" ||
-                newState.state === "TIMEOUT"
-              ) {
-                setStatus("FAIL");
-              } else {
-                setStatus("PROCESSING");
-              }
+              callbacks.onServerStateUpdate(
+                (resp.data.state as ServerStateString) || "IDLE",
+                resp.message,
+                resp.data.elapsed_ms || 0,
+                resp.data.timeout_ms
+              );
             }
             break;
-          case "processing":
-            setStatus("PROCESSING");
-            break;
+
           case "success":
-            setStatus("SUCCESS");
-            setLastResult(resp.data || null);
-            break;
-          case "error":
-            setStatus("FAIL");
-            if (resp.data) {
-              setLastResult(resp.data);
+            // Only handle transaction responses
+            if (resp.command_type === "transaction") {
+              const result: TransactionResult = {
+                TransType: resp.data?.TransType,
+                Amount: resp.data?.Amount,
+                ApprovalNo: resp.data?.ApprovalNo,
+                OrderNo: resp.data?.OrderNo,
+                CardNo: resp.data?.CardNo,
+                RespCode: resp.data?.RespCode,
+              };
+              callbacks.onTransactionSuccess(result);
             }
+            break;
+
+          case "error":
+            // Only handle transaction responses
+            if (resp.command_type === "transaction") {
+              const result: TransactionResult = resp.data
+                ? {
+                    TransType: resp.data?.TransType,
+                    Amount: resp.data?.Amount,
+                    ApprovalNo: resp.data?.ApprovalNo,
+                    OrderNo: resp.data?.OrderNo,
+                    CardNo: resp.data?.CardNo,
+                    RespCode: resp.data?.RespCode,
+                  }
+                : {};
+              callbacks.onTransactionError(resp.message, result);
+            }
+            break;
+
+          case "processing":
+            // Processing notifications are informational, state update will follow
             break;
         }
       } catch (e) {
-        console.error("Parse error", e);
+        console.error("Parse error:", e);
+        addLog("Parse error");
       }
     };
 
@@ -125,19 +137,17 @@ export const usePOS = () => {
     return () => {
       socket.close();
     };
-  }, []);
+  }, [callbacks, addLog]);
 
-  const sendCommand = useCallback(
-    (command: string, amount: string, orderNo?: string) => {
+  // Send transaction command
+  const sendTransaction = useCallback(
+    (command: "SALE" | "REFUND", amount: string, orderNo?: string) => {
       if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-        alert("Not connected to POS Server");
-        return;
+        console.error("Not connected to POS Server");
+        return false;
       }
 
-      setStatus("PROCESSING");
-      setMessage("Initializing...");
-      setLastResult(null);
-
+      addLog(`Sending ${command}: $${(parseInt(amount) / 100).toFixed(2)}`);
       ws.current.send(
         JSON.stringify({
           command,
@@ -145,47 +155,41 @@ export const usePOS = () => {
           order_no: orderNo,
         })
       );
+      return true;
     },
-    []
+    [addLog]
   );
 
+  // Send control commands
   const sendAbort = useCallback(() => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    addLog("Sending ABORT");
     ws.current.send(JSON.stringify({ command: "ABORT" }));
-  }, []);
+  }, [addLog]);
 
   const sendReconnect = useCallback(() => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    addLog("Sending RECONNECT");
     ws.current.send(JSON.stringify({ command: "RECONNECT" }));
-  }, []);
+  }, [addLog]);
+
+  const sendRestart = useCallback(() => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    addLog("Sending RESTART");
+    ws.current.send(JSON.stringify({ command: "RESTART" }));
+  }, [addLog]);
 
   const requestStatus = useCallback(() => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
     ws.current.send(JSON.stringify({ command: "STATUS" }));
   }, []);
 
-  const reset = useCallback(() => {
-    setStatus("IDLE");
-    setMessage("");
-    setLastResult(null);
-  }, []);
-
   return {
-    connected,
-    status,
-    message,
-    lastResult,
-    serverState,
-    sendCommand,
+    logs,
+    sendTransaction,
     sendAbort,
     sendReconnect,
+    sendRestart,
     requestStatus,
-    reset,
   };
-};
+}
