@@ -251,6 +251,12 @@ func Debug(format string, args ...interface{}) {
 	log.Printf("[DEBUG] %s", msg)
 }
 
+// Warn logs a warning message
+func Warn(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	log.Printf("[WARN] %s", msg)
+}
+
 // Transaction logs a transaction event
 func Transaction(transType, amount, orderNo, status string) {
 	log.Printf("[TRANS] Type=%s Amount=%s OrderNo=%s Status=%s", transType, amount, orderNo, status)

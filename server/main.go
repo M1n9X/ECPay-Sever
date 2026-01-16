@@ -23,22 +23,29 @@ func main() {
 	defer logger.Close()
 
 	logger.Info("ECPay POS Server starting...")
+	fmt.Println("ECPay POS Server starting...")
 
-	// 3. Initialize Port (Serial or TCP)
+	// 3. Initialize Port based on mode
 	var port driver.Port
 	var err error
 
-	if cfg.Mock {
-		logger.Info("Starting in MOCK MODE (connecting to Mock POS at localhost:9999)")
-		fmt.Println("Starting in MOCK MODE (connecting to Mock POS at localhost:9999)")
-		port, err = driver.OpenTCP("localhost:9999")
+	switch cfg.Mode {
+	case config.ModeTCP:
+		// TCP mode: connect directly to specified address
+		logger.Info("Mode: TCP (connecting to %s)", cfg.Port)
+		fmt.Printf("Mode: TCP (connecting to %s)\n", cfg.Port)
+		port, err = driver.OpenTCP(cfg.Port)
 		if err != nil {
-			logger.Error("Failed to connect to Mock POS: %v", err)
-			log.Fatalf("Failed to connect to Mock POS: %v", err)
+			logger.Error("Failed to connect: %v", err)
+			log.Fatalf("Failed to connect to %s: %v", cfg.Port, err)
 		}
-	} else {
-		logger.Info("Starting in REAL MODE with Auto-Detection enabled")
-		fmt.Println("Starting in REAL MODE with Auto-Detection enabled")
+
+	case config.ModeSerial:
+		fallthrough
+	default:
+		// Serial mode: use auto-detection scanner
+		logger.Info("Mode: Serial (auto-detection enabled)")
+		fmt.Println("Mode: Serial (auto-detection enabled)")
 		// Port remains nil, Manager will start scanner
 	}
 
@@ -55,10 +62,10 @@ func main() {
 	// 6. Start HTTP Server
 	http.HandleFunc("/ws", handler.ServeWS)
 
-	addr := ":8989"
-	logger.Info("Server listening on %s", addr)
-	fmt.Printf("Server listening on %s\n", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	logger.Info("WebSocket server listening on %s", cfg.WSAddr)
+	fmt.Printf("WebSocket server listening on %s\n", cfg.WSAddr)
+
+	if err := http.ListenAndServe(cfg.WSAddr, nil); err != nil {
 		logger.Error("ListenAndServe failed: %v", err)
 		log.Fatal("ListenAndServe:", err)
 	}
