@@ -52,6 +52,12 @@ func (sm *SerialManager) ExecuteTransaction(req protocol.ECPayRequest) (map[stri
 
 	// Ensure we always reset to IDLE when done
 	defer func() {
+		// If we are in an error state (like aborted), give the UI a moment to see it
+		// before resetting to IDLE
+		if sm.State.GetState() == StateError {
+			time.Sleep(2 * time.Second)
+		}
+
 		sm.State.Reset()
 		logger.Debug("Transaction state reset to IDLE")
 	}()

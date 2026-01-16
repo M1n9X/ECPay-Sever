@@ -37,9 +37,10 @@ fi
 # Start Server
 echo "[2/3] Starting Server in Mock Mode (port 8989)..."
 cd "$SCRIPT_DIR/server"
-go run main.go -mock > "$LOG_DIR/server.log" 2>&1 &
+# Use run_dev.sh to support restart
+./run_dev.sh -mock > "$LOG_DIR/server.log" 2>&1 &
 SERVER_PID=$!
-echo "      Server PID: $SERVER_PID"
+echo "      Server Runner PID: $SERVER_PID"
 sleep 2
 
 # Check if server started

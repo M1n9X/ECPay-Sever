@@ -44,6 +44,7 @@ export interface POSCallbacks {
 export function usePOS(callbacks: POSCallbacks) {
   const ws = useRef<WebSocket | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [reconnectCount, setReconnectCount] = useState(0);
 
   const addLog = useCallback((msg: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -52,92 +53,114 @@ export function usePOS(callbacks: POSCallbacks) {
 
   // Connect to WebSocket
   useEffect(() => {
-    const socket = new WebSocket("ws://localhost:8989/ws");
+    let socket: WebSocket;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
 
-    socket.onopen = () => {
-      console.log("Connected to POS Server");
-      addLog("Connected to POS Server");
-      callbacks.onConnect();
-    };
+    const connect = () => {
+      socket = new WebSocket("ws://localhost:8989/ws");
 
-    socket.onclose = () => {
-      console.log("Disconnected from POS Server");
-      addLog("Disconnected from POS Server");
-      callbacks.onDisconnect();
-    };
+      socket.onopen = () => {
+        console.log("Connected to POS Server");
+        addLog("Connected to POS Server");
+        callbacks.onConnect();
+      };
 
-    socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      addLog("WebSocket error");
-    };
+      socket.onclose = () => {
+        console.log("Disconnected from POS Server");
+        addLog("Disconnected from POS Server");
+        callbacks.onDisconnect();
 
-    socket.onmessage = (event) => {
-      try {
-        const resp: POSResponse = JSON.parse(event.data);
-        console.log("Received:", resp);
-        addLog(`[${resp.status}] ${resp.message}`);
+        // Auto-reconnect after 3 seconds
+        addLog("Auto-reconnecting in 3s...");
+        reconnectTimer = setTimeout(() => {
+          setReconnectCount((prev) => prev + 1);
+        }, 3000);
+      };
 
-        // Handle different response types
-        switch (resp.status) {
-          case "status_update":
-            if (resp.data) {
-              callbacks.onServerStateUpdate(
-                (resp.data.state as ServerStateString) || "IDLE",
-                resp.message,
-                resp.data.elapsed_ms || 0,
-                resp.data.timeout_ms
-              );
-            }
-            break;
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        addLog("WebSocket error");
+      };
 
-          case "success":
-            // Only handle transaction responses
-            if (resp.command_type === "transaction") {
-              const result: TransactionResult = {
-                TransType: resp.data?.TransType,
-                Amount: resp.data?.Amount,
-                ApprovalNo: resp.data?.ApprovalNo,
-                OrderNo: resp.data?.OrderNo,
-                CardNo: resp.data?.CardNo,
-                RespCode: resp.data?.RespCode,
-              };
-              callbacks.onTransactionSuccess(result);
-            }
-            break;
+      socket.onmessage = (event) => {
+        try {
+          const resp: POSResponse = JSON.parse(event.data);
+          console.log("Received:", resp);
+          // Log everything
+          addLog(`[${resp.status}] ${resp.message}`);
 
-          case "error":
-            // Only handle transaction responses
-            if (resp.command_type === "transaction") {
-              const result: TransactionResult = resp.data
-                ? {
-                    TransType: resp.data?.TransType,
-                    Amount: resp.data?.Amount,
-                    ApprovalNo: resp.data?.ApprovalNo,
-                    OrderNo: resp.data?.OrderNo,
-                    CardNo: resp.data?.CardNo,
-                    RespCode: resp.data?.RespCode,
-                  }
-                : {};
-              callbacks.onTransactionError(resp.message, result);
-            }
-            break;
+          // Handle different response types
+          switch (resp.status) {
+            case "status_update":
+              if (resp.data) {
+                callbacks.onServerStateUpdate(
+                  (resp.data.state as ServerStateString) || "IDLE",
+                  resp.message,
+                  resp.data.elapsed_ms || 0,
+                  resp.data.timeout_ms
+                );
+              }
+              break;
 
-          case "processing":
-            // Processing notifications are informational, state update will follow
-            break;
+            case "success":
+              // Handle transaction responses
+              if (resp.command_type === "transaction") {
+                const result: TransactionResult = {
+                  TransType: resp.data?.TransType,
+                  Amount: resp.data?.Amount,
+                  ApprovalNo: resp.data?.ApprovalNo,
+                  OrderNo: resp.data?.OrderNo,
+                  CardNo: resp.data?.CardNo,
+                  RespCode: resp.data?.RespCode,
+                };
+                callbacks.onTransactionSuccess(result);
+              }
+              // Handle control responses (e.g. Abort success)
+              else if (resp.command_type === "control") {
+                // For now just allow the log to stand
+              }
+              break;
+
+            case "error":
+              // Only handle transaction responses
+              if (resp.command_type === "transaction") {
+                const result: TransactionResult = resp.data
+                  ? {
+                      TransType: resp.data?.TransType,
+                      Amount: resp.data?.Amount,
+                      ApprovalNo: resp.data?.ApprovalNo,
+                      OrderNo: resp.data?.OrderNo,
+                      CardNo: resp.data?.CardNo,
+                      RespCode: resp.data?.RespCode,
+                    }
+                  : {};
+                callbacks.onTransactionError(resp.message, result);
+              }
+              break;
+
+            case "processing":
+              // Processing notifications are informational, state update will follow
+              break;
+          }
+        } catch (e) {
+          console.error("Parse error:", e);
+          addLog("Parse error");
         }
-      } catch (e) {
-        console.error("Parse error:", e);
-        addLog("Parse error");
-      }
+      };
+
+      ws.current = socket;
     };
 
-    ws.current = socket;
+    connect();
 
     return () => {
-      socket.close();
+      if (socket) {
+        socket.onclose = null; // Prevent triggering auto-reconnect on cleanup
+        socket.close();
+      }
+      clearTimeout(reconnectTimer);
     };
-  }, [callbacks, addLog]);
+  }, [callbacks, addLog, reconnectCount]);
 
   // Send transaction command
   const sendTransaction = useCallback(
@@ -168,15 +191,27 @@ export function usePOS(callbacks: POSCallbacks) {
   }, [addLog]);
 
   const sendReconnect = useCallback(() => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-    addLog("Sending RECONNECT");
-    ws.current.send(JSON.stringify({ command: "RECONNECT" }));
+    // If connected, send command to server to reconnect to POS
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      addLog("Sending RECONNECT (POS)");
+      ws.current.send(JSON.stringify({ command: "RECONNECT" }));
+    } else {
+      // If disconnected, try to reconnect WebSocket
+      addLog("Reconnecting to Server...");
+      setReconnectCount((c) => c + 1);
+    }
   }, [addLog]);
 
   const sendRestart = useCallback(() => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-    addLog("Sending RESTART");
-    ws.current.send(JSON.stringify({ command: "RESTART" }));
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      addLog("Sending RESTART (Server)");
+      ws.current.send(JSON.stringify({ command: "RESTART" }));
+    } else {
+      // If disconnected, we can't tell server to restart, but we can try to reconnect WS
+      // Maybe the server is back up?
+      addLog("Reconnecting to Server...");
+      setReconnectCount((c) => c + 1);
+    }
   }, [addLog]);
 
   const requestStatus = useCallback(() => {
