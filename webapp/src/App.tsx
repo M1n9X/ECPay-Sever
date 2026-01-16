@@ -1,9 +1,15 @@
-import { useState, useEffect, useRef } from "react";
-import { usePOS } from "./hooks/usePOS";
+import { useEffect, useRef, useMemo, useCallback } from "react";
+import {
+  useAppState,
+  type TransactionResult,
+  type ServerStateString,
+} from "./hooks/useAppState";
+import { usePOS, type POSCallbacks } from "./hooks/usePOS";
 import { useOrders } from "./hooks/useOrders";
 import type { Order } from "./hooks/useOrders";
 import { Keypad } from "./components/Keypad";
 import { OrderHistory } from "./components/OrderHistory";
+import { ServerStatus } from "./components/ServerStatus";
 import {
   CreditCard,
   Terminal,
@@ -13,112 +19,176 @@ import {
   History,
   Wifi,
   WifiOff,
-  RefreshCw,
   XCircle,
   Activity,
+  Clock,
 } from "lucide-react";
 import { clsx } from "clsx";
 
 function App() {
+  // State machine
   const {
-    connected,
-    status,
-    message,
-    lastResult,
-    serverState,
-    sendCommand,
-    sendAbort,
-    sendReconnect,
-    reset,
-  } = usePOS();
+    state,
+    canSubmit,
+    canAbort,
+    canInputForm,
+    showModal,
+    connect,
+    disconnect,
+    updateServerState,
+    transactionSuccess,
+    transactionError,
+    dismiss,
+    setTab,
+    setAmount,
+    setOrderNo,
+    setRefundingOrder,
+  } = useAppState();
+
+  // Order management
   const { orders, addOrder, markRefunded } = useOrders();
-  const [tab, setTab] = useState<"SALE" | "REFUND">("SALE");
-  const [amount, setAmount] = useState("");
-  const [orderNo, setOrderNo] = useState("");
-  const [refundingOrderId, setRefundingOrderId] = useState<string | null>(null);
 
-  const handleInput = (val: string) => {
-    if (amount.length > 8) return;
-    setAmount((prev) => prev + val);
-  };
-
-  const handleClear = () => setAmount("");
-  const handleDelete = () => setAmount((prev) => prev.slice(0, -1));
-
-  const handleCheckout = () => {
-    if (!amount || parseInt(amount) === 0) return;
-    sendCommand(tab, amount, tab === "REFUND" ? orderNo : undefined);
-  };
-
-  const handleRefundOrder = (order: Order) => {
-    setTab("REFUND");
-    setAmount(order.amount.toString());
-    setOrderNo(order.orderNo);
-    setRefundingOrderId(order.id);
-  };
-  // Track which transaction we've already processed to avoid duplicates
+  // Track processed transactions to avoid duplicates
   const processedApprovalRef = useRef<string | null>(null);
-  const refundingOrderIdRef = useRef<string | null>(null);
 
-  // Sync ref with state for refundingOrderId
-  useEffect(() => {
-    refundingOrderIdRef.current = refundingOrderId;
-  }, [refundingOrderId]);
+  // POS callbacks
+  const posCallbacks: POSCallbacks = useMemo(
+    () => ({
+      onConnect: connect,
+      onDisconnect: disconnect,
+      onServerStateUpdate: (
+        serverState: ServerStateString,
+        message: string,
+        elapsed_ms: number,
+        timeout_ms?: number
+      ) => {
+        updateServerState(serverState, message, elapsed_ms, timeout_ms);
+      },
+      onTransactionSuccess: (result: TransactionResult) => {
+        transactionSuccess(result);
+      },
+      onTransactionError: (error: string, result?: TransactionResult) => {
+        transactionError(error, result);
+      },
+    }),
+    [
+      connect,
+      disconnect,
+      updateServerState,
+      transactionSuccess,
+      transactionError,
+    ]
+  );
 
-  // Save order when transaction succeeds
+  // WebSocket communication
+  const { logs, sendTransaction, sendAbort, sendReconnect, sendRestart } =
+    usePOS(posCallbacks);
+
+  // Handle order saving on success
   useEffect(() => {
-    if (status === "SUCCESS" && lastResult) {
-      // Skip if we already processed this exact transaction
-      const currentApproval = lastResult.ApprovalNo ?? null;
+    if (state.appState === "SUCCESS" && state.lastResult) {
+      const currentApproval = state.lastResult.ApprovalNo ?? null;
       if (processedApprovalRef.current === currentApproval) {
         return;
       }
       processedApprovalRef.current = currentApproval;
 
       const orderData = {
-        type: (lastResult.TransType === "01" ? "SALE" : "REFUND") as
+        type: (state.lastResult.TransType === "01" ? "SALE" : "REFUND") as
           | "SALE"
           | "REFUND",
-        amount: parseInt(lastResult.Amount || "0"),
-        orderNo: lastResult.OrderNo || "",
-        approvalNo: lastResult.ApprovalNo || "",
-        cardNo: lastResult.CardNo || "",
+        amount: parseInt(state.lastResult.Amount || "0"),
+        orderNo: state.lastResult.OrderNo || "",
+        approvalNo: state.lastResult.ApprovalNo || "",
+        cardNo: state.lastResult.CardNo || "",
       };
       addOrder(orderData);
 
-      // If this was a refund for an existing order, mark it
-      if (refundingOrderIdRef.current && orderData.type === "REFUND") {
-        markRefunded(refundingOrderIdRef.current);
-        setRefundingOrderId(null);
+      // Mark original order as refunded if applicable
+      if (state.form.refundingOrderId && orderData.type === "REFUND") {
+        markRefunded(state.form.refundingOrderId);
       }
     }
-  }, [status, lastResult, addOrder, markRefunded]);
+  }, [
+    state.appState,
+    state.lastResult,
+    state.form.refundingOrderId,
+    addOrder,
+    markRefunded,
+  ]);
+
+  // Form handlers
+  const handleInput = useCallback(
+    (val: string) => {
+      if (state.form.amount.length > 8) return;
+      setAmount(state.form.amount + val);
+    },
+    [state.form.amount, setAmount]
+  );
+
+  const handleClear = useCallback(() => setAmount(""), [setAmount]);
+
+  const handleDelete = useCallback(() => {
+    setAmount(state.form.amount.slice(0, -1));
+  }, [state.form.amount, setAmount]);
+
+  const handleCheckout = useCallback(() => {
+    if (!canSubmit) return;
+    sendTransaction(
+      state.form.tab,
+      state.form.amount,
+      state.form.tab === "REFUND" ? state.form.orderNo : undefined
+    );
+  }, [canSubmit, sendTransaction, state.form]);
+
+  const handleRefundOrder = useCallback(
+    (order: Order) => {
+      setRefundingOrder(order.id, order.amount.toString(), order.orderNo);
+    },
+    [setRefundingOrder]
+  );
+
+  const handleTabChange = useCallback(
+    (tab: "SALE" | "REFUND") => {
+      if (!canInputForm) return;
+      setTab(tab);
+    },
+    [canInputForm, setTab]
+  );
+
+  const handleDismiss = useCallback(() => {
+    dismiss();
+    processedApprovalRef.current = null;
+  }, [dismiss]);
+
+  // Derived values for display
+  const amountDisplay = (parseInt(state.form.amount || "0") / 100).toFixed(2);
 
   return (
     <div className="h-screen bg-black text-white flex flex-col lg:flex-row items-center lg:items-start justify-center gap-4 p-3 lg:p-4 overflow-hidden">
       {/* Connection Status Header */}
       <div className="fixed top-4 left-4 right-4 flex items-center justify-between z-40">
         <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-800">
-          {connected ? (
+          {state.connected ? (
             <Wifi className="w-4 h-4 text-green-500" />
           ) : (
             <WifiOff className="w-4 h-4 text-red-500" />
           )}
           <span className="text-sm font-medium text-zinc-400">
-            {connected ? "Server Connected" : "Disconnected"}
+            {state.connected ? "Server Connected" : "Disconnected"}
           </span>
-          {/* Server State Indicator */}
-          {serverState && serverState.state !== "IDLE" && (
+          {/* Server State Indicator - Show when processing */}
+          {state.appState === "PROCESSING" && (
             <>
               <span className="text-zinc-600">|</span>
               <Activity className="w-3 h-3 text-blue-400 animate-pulse" />
               <span className="text-xs font-mono text-blue-400">
-                {serverState.state}
+                {state.serverState}
               </span>
-              {serverState.timeout_ms && serverState.elapsed_ms && (
+              {state.timeout_ms && state.elapsed_ms > 0 && (
                 <span className="text-xs text-zinc-500">
-                  ({Math.floor(serverState.elapsed_ms / 1000)}s /{" "}
-                  {Math.floor(serverState.timeout_ms / 1000)}s)
+                  ({Math.floor(state.elapsed_ms / 1000)}s /{" "}
+                  {Math.floor(state.timeout_ms / 1000)}s)
                 </span>
               )}
             </>
@@ -126,22 +196,13 @@ function App() {
         </div>
         {/* Control Buttons */}
         <div className="flex items-center gap-2">
-          {serverState && serverState.state !== "IDLE" && (
+          {canAbort && (
             <button
               onClick={sendAbort}
               className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-red-500/30"
             >
               <XCircle className="w-3 h-3" />
               Abort
-            </button>
-          )}
-          {!connected && (
-            <button
-              onClick={sendReconnect}
-              className="flex items-center gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-blue-500/30"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Reconnect
             </button>
           )}
         </div>
@@ -167,28 +228,28 @@ function App() {
           {/* Tabs */}
           <div className="flex p-1 bg-surface rounded-xl mb-4 border border-zinc-800">
             <button
-              onClick={() => {
-                setTab("SALE");
-                setOrderNo("");
-                setRefundingOrderId(null);
-              }}
+              onClick={() => handleTabChange("SALE")}
+              disabled={!canInputForm}
               className={clsx(
                 "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
-                tab === "SALE"
+                state.form.tab === "SALE"
                   ? "bg-zinc-800 text-white shadow-lg"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-zinc-500 hover:text-zinc-300",
+                !canInputForm && "opacity-50 cursor-not-allowed"
               )}
             >
               <CreditCard className="w-4 h-4" />
               Sale
             </button>
             <button
-              onClick={() => setTab("REFUND")}
+              onClick={() => handleTabChange("REFUND")}
+              disabled={!canInputForm}
               className={clsx(
                 "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
-                tab === "REFUND"
+                state.form.tab === "REFUND"
                   ? "bg-zinc-800 text-white shadow-lg"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-zinc-500 hover:text-zinc-300",
+                !canInputForm && "opacity-50 cursor-not-allowed"
               )}
             >
               <RotateCcw className="w-4 h-4" />
@@ -197,17 +258,21 @@ function App() {
           </div>
 
           {/* Refund Order Input */}
-          {tab === "REFUND" && (
+          {state.form.tab === "REFUND" && (
             <div className="mb-3">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">
                 Original Order No
               </label>
               <input
                 type="text"
-                value={orderNo}
+                value={state.form.orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
+                disabled={!canInputForm}
                 placeholder="Enter Order No"
-                className="w-full mt-1 bg-surface border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm"
+                className={clsx(
+                  "w-full mt-1 bg-surface border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm",
+                  !canInputForm && "opacity-50 cursor-not-allowed"
+                )}
               />
             </div>
           )}
@@ -217,23 +282,24 @@ function App() {
             onInput={handleInput}
             onClear={handleClear}
             onDelete={handleDelete}
-            amount={amount}
+            amount={state.form.amount}
+            disabled={!canInputForm}
           />
 
           {/* Action Button */}
           <button
             onClick={handleCheckout}
-            disabled={!connected || !amount || (tab === "REFUND" && !orderNo)}
+            disabled={!canSubmit}
             className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-lg shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
           >
-            {tab === "SALE" ? "Charge" : "Refund"} $
-            {(parseInt(amount || "0") / 100).toFixed(2)}
+            {state.form.tab === "SALE" ? "Charge" : "Refund"} ${amountDisplay}
           </button>
         </div>
       </div>
 
-      {/* Order History Panel */}
-      <div className="w-full max-w-md lg:w-80 mt-2 lg:mt-12">
+      {/* Right Panel */}
+      <div className="w-full max-w-md lg:w-72 mt-2 lg:mt-12 flex flex-col gap-4">
+        {/* Order History Panel */}
         <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 shadow-xl">
           <div className="flex items-center gap-2 mb-3">
             <History className="w-4 h-4 text-zinc-500" />
@@ -243,21 +309,70 @@ function App() {
           </div>
           <OrderHistory orders={orders} onRefund={handleRefundOrder} />
         </div>
+
+        {/* Server Status Panel */}
+        <ServerStatus
+          connected={state.connected}
+          serverState={{
+            state: state.serverState,
+            message: state.message,
+            elapsed_ms: state.elapsed_ms,
+            timeout_ms: state.timeout_ms ?? undefined,
+            is_connected: state.connected,
+          }}
+          logs={logs}
+          onAbort={sendAbort}
+          onReconnect={sendReconnect}
+          onRestart={sendRestart}
+        />
       </div>
 
       {/* Status Overlay Modal */}
-      {status !== "IDLE" && (
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center">
-            {status === "PROCESSING" && (
+            {state.appState === "PROCESSING" && (
               <>
                 <div className="w-16 h-16 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin mb-6" />
                 <h3 className="text-xl font-bold mb-2">Processing</h3>
-                <p className="text-zinc-400">{message}</p>
+                <p className="text-zinc-400 mb-2">{state.message}</p>
+                {/* Progress display */}
+                {state.timeout_ms && state.elapsed_ms > 0 && (
+                  <div className="w-full mt-4">
+                    <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Elapsed
+                      </span>
+                      <span>
+                        {Math.floor(state.elapsed_ms / 1000)}s /{" "}
+                        {Math.floor(state.timeout_ms / 1000)}s
+                      </span>
+                    </div>
+                    <div className="w-full bg-zinc-800 rounded-full h-1.5">
+                      <div
+                        className="bg-blue-500 h-1.5 rounded-full transition-all"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (state.elapsed_ms / state.timeout_ms) * 100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {/* Abort button in modal */}
+                <button
+                  onClick={sendAbort}
+                  className="mt-6 w-full py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl font-medium transition-colors border border-red-500/30"
+                >
+                  Abort Transaction
+                </button>
               </>
             )}
 
-            {status === "SUCCESS" && (
+            {state.appState === "SUCCESS" && (
               <>
                 <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 mb-6">
                   <CheckCircle2 className="w-8 h-8" />
@@ -266,7 +381,7 @@ function App() {
                 <p className="text-zinc-400 mb-6">
                   Auth Code:{" "}
                   <span className="text-white font-mono bg-zinc-800 px-2 py-1 rounded">
-                    {lastResult?.ApprovalNo}
+                    {state.lastResult?.ApprovalNo}
                   </span>
                 </p>
 
@@ -274,29 +389,28 @@ function App() {
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Amount</span>
                     <span className="font-mono">
-                      ${(parseInt(lastResult?.Amount || "0") / 100).toFixed(2)}
+                      $
+                      {(
+                        parseInt(state.lastResult?.Amount || "0") / 100
+                      ).toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Order No</span>
                     <span className="font-mono text-xs">
-                      {lastResult?.OrderNo}
+                      {state.lastResult?.OrderNo}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Card</span>
                     <span className="font-mono text-xs">
-                      {lastResult?.CardNo}
+                      {state.lastResult?.CardNo}
                     </span>
                   </div>
                 </div>
 
                 <button
-                  onClick={() => {
-                    reset();
-                    setAmount("");
-                    setOrderNo("");
-                  }}
+                  onClick={handleDismiss}
                   className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
                 >
                   Close
@@ -304,15 +418,19 @@ function App() {
               </>
             )}
 
-            {status === "FAIL" && (
+            {(state.appState === "ERROR" || state.appState === "TIMEOUT") && (
               <>
                 <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 mb-6">
                   <AlertTriangle className="w-8 h-8" />
                 </div>
-                <h3 className="text-xl font-bold mb-2">Transaction Failed</h3>
-                <p className="text-red-400 mb-6">{message}</p>
+                <h3 className="text-xl font-bold mb-2">
+                  {state.appState === "TIMEOUT"
+                    ? "Transaction Timeout"
+                    : "Transaction Failed"}
+                </h3>
+                <p className="text-red-400 mb-6">{state.message}</p>
                 <button
-                  onClick={reset}
+                  onClick={handleDismiss}
                   className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
                 >
                   Dismiss

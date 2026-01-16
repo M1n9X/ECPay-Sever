@@ -6,9 +6,16 @@ interface KeypadProps {
   onClear: () => void;
   onDelete: () => void;
   amount: string;
+  disabled?: boolean;
 }
 
-export const Keypad = ({ onInput, onClear, onDelete, amount }: KeypadProps) => {
+export const Keypad = ({
+  onInput,
+  onClear,
+  onDelete,
+  amount,
+  disabled = false,
+}: KeypadProps) => {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "00", "0"];
 
   return (
@@ -30,7 +37,11 @@ export const Keypad = ({ onInput, onClear, onDelete, amount }: KeypadProps) => {
         <button
           key={k}
           onClick={() => onInput(k)}
-          className="h-14 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 active:scale-95 transition-all text-xl font-bold text-white shadow-lg shadow-black/20"
+          disabled={disabled}
+          className={clsx(
+            "h-14 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 active:scale-95 transition-all text-xl font-bold text-white shadow-lg shadow-black/20",
+            disabled && "opacity-50 cursor-not-allowed hover:bg-zinc-900"
+          )}
         >
           {k}
         </button>
@@ -39,14 +50,22 @@ export const Keypad = ({ onInput, onClear, onDelete, amount }: KeypadProps) => {
       {/* Action Keys */}
       <button
         onClick={onDelete}
-        className="h-14 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 active:scale-95 transition-all flex items-center justify-center text-white"
+        disabled={disabled}
+        className={clsx(
+          "h-14 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 active:scale-95 transition-all flex items-center justify-center text-white",
+          disabled && "opacity-50 cursor-not-allowed hover:bg-zinc-900"
+        )}
       >
         <Delete className="w-6 h-6" />
       </button>
 
       <button
         onClick={onClear}
-        className="col-span-3 h-12 mt-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 uppercase font-bold tracking-widest text-sm"
+        disabled={disabled}
+        className={clsx(
+          "col-span-3 h-12 mt-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 uppercase font-bold tracking-widest text-sm",
+          disabled && "opacity-50 cursor-not-allowed hover:bg-red-500/10"
+        )}
       >
         Clear
       </button>
