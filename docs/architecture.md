@@ -2,21 +2,44 @@
 
 ## Overview
 
-The ECPay POS system consists of three main components that work together to process credit card transactions via RS232 protocol:
+The ECPay POS system consists of three main components that work together to process credit card transactions via RS232 protocol.
+
+### Development Environment (PTY Mode)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                              System Overview                             │
+│                         Development Environment                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  ┌──────────┐    WebSocket     ┌──────────┐    RS232/TCP   ┌──────────┐ │
-│  │          │ ◄──────────────► │          │ ◄────────────► │          │ │
-│  │  Webapp  │    JSON msgs     │  Server  │   603-byte     │   POS    │ │
-│  │  (React) │                  │   (Go)   │    frames      │ Terminal │ │
-│  │          │                  │          │                │          │ │
-│  └──────────┘                  └──────────┘                └──────────┘ │
-│    :5173                         :8989                        :9999     │
-│                                                            (mock mode)  │
+│  ┌──────────┐   Virtual Serial    ┌──────────┐   WebSocket  ┌─────────┐ │
+│  │ Mock POS │ ◄─────────────────► │  Server  │ ◄──────────► │ Webapp  │ │
+│  │  (Go)    │  /tmp/mock-pos-pty  │   (Go)   │   :8989/ws   │ (React) │ │
+│  │          │   via socat PTY     │          │              │         │ │
+│  └──────────┘                     └──────────┘              └─────────┘ │
+│                                                                          │
+│  * Mock POS creates virtual serial port using socat                      │
+│  * Server auto-detects PTY via ECHO handshake                           │
+│  * Same code path as production - no mock logic in Server               │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Production Environment (Real Serial)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Production Environment                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────┐   RS232 Serial      ┌──────────┐   WebSocket  ┌─────────┐ │
+│  │ ECPay    │ ◄─────────────────► │  Server  │ ◄──────────► │ Webapp  │ │
+│  │ POS      │   COM3 / ttyUSB0    │   (Go)   │   :8989/ws   │ (React) │ │
+│  │ Terminal │   115200 bps 8N1    │          │              │         │ │
+│  └──────────┘                     └──────────┘              └─────────┘ │
+│                                                                          │
+│  * Server auto-detects COM port via ECHO handshake                      │
+│  * Identical code to development - zero mock logic                      │
+│                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -34,6 +57,11 @@ The webapp provides a modern POS terminal interface with:
 - Order history with refund capability
 - Server status monitoring and control
 
+**Key Files:**
+- `src/hooks/useAppState.ts` - State machine
+- `src/hooks/usePOS.ts` - WebSocket communication
+- `src/hooks/useOrders.ts` - Order history management
+
 ### 2. Server (Go)
 
 **Port:** 8989 (WebSocket)
@@ -41,19 +69,71 @@ The webapp provides a modern POS terminal interface with:
 The server bridges the webapp and POS terminal:
 
 - WebSocket API for webapp communication
-- RS232 protocol implementation for POS
+- RS232 protocol implementation (603-byte frames)
+- Auto-detection of POS devices via ECHO handshake
 - State machine for transaction management
 - Logging with auto-rotation
 
-### 3. POS Terminal / Mock POS
+**Key Files:**
+- `driver/scanner.go` - Auto-detection with ECHO handshake
+- `driver/manager.go` - Transaction execution
+- `driver/serial.go` - Serial port abstraction
+- `driver/state.go` - State machine
+- `protocol/packet.go` - RS232 frame builder
+- `api/websocket.go` - WebSocket handler
 
-**Port:** 9999 (Mock mode only)
+### 3. Mock POS (Go)
 
-Physical ECPay POS terminal or mock simulator for testing:
+**Modes:** PTY (development) or TCP (fallback)
 
-- RS232 communication at 115200 bps
-- 603-byte frame protocol (STX + 600B DATA + ETX + LRC)
-- Transaction processing with card reader
+Mock simulator for development and testing:
+
+- Creates virtual serial port via socat PTY
+- Full RS232 protocol implementation
+- Configurable delays, error rates, decline rates
+- Responds to ECHO handshake for auto-detection
+
+**Key Features:**
+- `-mode pty` - Virtual serial port (recommended)
+- `-mode tcp` - TCP fallback (port 9999)
+- `-delay 2000` - Processing delay in ms
+- `-decline-prob 0.1` - 10% decline rate
+- `-verbose` - Detailed logging
+
+---
+
+## Auto-Detection Flow
+
+The Server automatically discovers POS devices using ECHO handshake:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Auto-Detection Sequence                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Scanner                                                                 │
+│     │                                                                    │
+│     ├─► discoverPorts()                                                  │
+│     │      ├─► serial.GetPortsList()      // Hardware: COM3, ttyUSB0    │
+│     │      └─► Check /tmp/mock-pos-pty    // Virtual PTY                │
+│     │                                                                    │
+│     └─► For each port: probePort()                                       │
+│            │                                                             │
+│            ├─► OpenSerial(port, 115200)                                  │
+│            ├─► Send ECHO request (TransType=80)                          │
+│            ├─► Wait for ACK (500ms timeout)                              │
+│            ├─► Wait for Response (2s timeout)                            │
+│            ├─► Validate LRC checksum                                     │
+│            ├─► Verify TransType=80 in response                           │
+│            ├─► Send ACK to complete handshake                            │
+│            └─► ConnectTo(port) if successful                             │
+│                                                                          │
+│  Timing:                                                                 │
+│    - Initial burst: 3 attempts, 1s apart                                │
+│    - Periodic scan: Every 20s if disconnected                           │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -72,8 +152,8 @@ ws://localhost:8989/ws
 ```json
 {
   "command": "SALE" | "REFUND" | "STATUS" | "ABORT" | "RECONNECT" | "RESTART",
-  "amount": "100",        // Amount in cents (for SALE/REFUND)
-  "order_no": "ORD123"    // Original order number (for REFUND)
+  "amount": "100",
+  "order_no": "ORD123"
 }
 ```
 
@@ -85,15 +165,12 @@ ws://localhost:8989/ws
   "message": "Human readable message",
   "command_type": "transaction" | "control" | "status",
   "data": {
-    // For transactions:
-    "TransType": "01",           // 01=SALE, 02=REFUND
+    "TransType": "01",
     "Amount": "100",
     "ApprovalNo": "123456",
     "OrderNo": "ORD20240116...",
     "CardNo": "************1234",
-    "RespCode": "00",
-    
-    // For status updates:
+    "RespCode": "0000",
     "state": "WAIT_RESPONSE",
     "elapsed_ms": 5000,
     "timeout_ms": 65000,
@@ -112,7 +189,7 @@ ws://localhost:8989/ws
 | `ECHO` | transaction | Connection test |
 | `STATUS` | status | Request current server state |
 | `ABORT` | control | Cancel in-progress transaction |
-| `RECONNECT` | control | Reconnect to POS terminal |
+| `RECONNECT` | control | Trigger POS device rescan |
 | `RESTART` | control | Restart server (emergency) |
 
 ---
@@ -134,7 +211,7 @@ ws://localhost:8989/ws
 │        │                      ┌──────────┐                             │
 │        │                      │ WAIT_ACK │──────┐                      │
 │        │                      └────┬─────┘      │                      │
-│        │                           │            │                      │
+│        │                           │            │ Error/Timeout        │
 │        │                           ▼            │                      │
 │        │                    ┌──────────────┐    │                      │
 │        │                    │ WAIT_RESPONSE│────┤                      │
@@ -154,7 +231,7 @@ ws://localhost:8989/ws
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Server States (from `driver/state.go`):**
+**State Timeouts:**
 
 | State | Timeout | Description |
 |-------|---------|-------------|
@@ -169,39 +246,11 @@ ws://localhost:8989/ws
 
 ### Webapp State Machine
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                         Webapp Application States                       │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│    ┌──────────────┐   Connect    ┌──────┐                              │
-│    │ DISCONNECTED │ ───────────► │ IDLE │ ◄───────────────────────┐    │
-│    └──────────────┘              └──┬───┘                         │    │
-│           ▲                         │                             │    │
-│           │                         │ Submit Transaction          │    │
-│           │ Disconnect              ▼                             │    │
-│           │                   ┌────────────┐                      │    │
-│           │                   │ PROCESSING │                      │    │
-│           │                   └─────┬──────┘                      │    │
-│           │                         │                             │    │
-│           │         ┌───────────────┼───────────────┐             │    │
-│           │         ▼               ▼               ▼             │    │
-│           │    ┌─────────┐    ┌─────────┐    ┌─────────┐         │    │
-│           │    │ SUCCESS │    │  ERROR  │    │ TIMEOUT │         │    │
-│           │    └────┬────┘    └────┬────┘    └────┬────┘         │    │
-│           │         │              │              │               │    │
-│           │         └──────────────┴──────────────┘               │    │
-│           │                        │ Dismiss                      │    │
-│           │                        └──────────────────────────────┘    │
-│           │                                                            │
-└───────────┴────────────────────────────────────────────────────────────┘
-```
-
 **State Mapping (Server → Webapp):**
 
 | Server State(s) | Webapp State | UI Behavior |
 |-----------------|--------------|-------------|
-| - (WebSocket closed) | `DISCONNECTED` | Show reconnect prompt |
+| (WebSocket closed) | `DISCONNECTED` | Show reconnect prompt |
 | `IDLE` | `IDLE` | Enable form input |
 | `SENDING`, `WAIT_ACK`, `WAIT_RESPONSE`, `PARSING` | `PROCESSING` | Show progress modal |
 | `SUCCESS` | `SUCCESS` | Show success modal |
@@ -217,75 +266,27 @@ ws://localhost:8989/ws
 ```
     Webapp                    Server                      POS
       │                         │                          │
-      │  1. Send SALE request   │                          │
+      │  1. SALE request        │                          │
       │ ───────────────────────►│                          │
       │                         │                          │
-      │  2. status_update       │  3. Send 603-byte frame  │
-      │     state: SENDING      │ ────────────────────────►│
-      │ ◄───────────────────────│                          │
+      │  2. status: SENDING     │  3. Send 603-byte frame  │
+      │ ◄───────────────────────│ ────────────────────────►│
       │                         │                          │
-      │  4. status_update       │  5. Receive ACK (0x06)   │
-      │     state: WAIT_ACK     │ ◄────────────────────────│
-      │ ◄───────────────────────│                          │
+      │  4. status: WAIT_ACK    │  5. ACK (0x06)           │
+      │ ◄───────────────────────│ ◄────────────────────────│
       │                         │                          │
-      │  6. status_update       │                          │
-      │     state: WAIT_RESPONSE│    (User inserts card)   │
-      │ ◄───────────────────────│                          │
+      │  6. status: WAIT_RESPONSE                          │
+      │ ◄───────────────────────│    (User swipes card)    │
       │                         │                          │
-      │                         │  7. Receive response     │
+      │                         │  7. Response frame       │
       │                         │ ◄────────────────────────│
       │                         │                          │
-      │  8. status_update       │  9. Send ACK (0x06)      │
-      │     state: PARSING      │ ────────────────────────►│
-      │ ◄───────────────────────│                          │
+      │  8. status: PARSING     │  9. ACK (0x06)           │
+      │ ◄───────────────────────│ ────────────────────────►│
       │                         │                          │
       │  10. success response   │                          │
-      │      command_type:      │                          │
-      │        transaction      │                          │
       │ ◄───────────────────────│                          │
-      │                         │                          │
 ```
-
-### Abort Transaction
-
-```
-    Webapp                    Server                      POS
-      │                         │                          │
-      │  (Transaction in progress - WAIT_RESPONSE)         │
-      │                         │                          │
-      │  1. Send ABORT          │                          │
-      │ ───────────────────────►│                          │
-      │                         │  2. Close cancel channel │
-      │                         │     (internal signal)    │
-      │                         │                          │
-      │  3. success response    │                          │
-      │     command_type:       │                          │
-      │       control           │                          │
-      │     "Transaction        │                          │
-      │      aborted"           │                          │
-      │ ◄───────────────────────│                          │
-      │                         │                          │
-      │  4. status_update       │                          │
-      │     state: ERROR        │                          │
-      │     "aborted by user"   │                          │
-      │ ◄───────────────────────│                          │
-      │                         │                          │
-```
-
----
-
-## Button State Logic
-
-The webapp determines button states from the current `AppState`:
-
-| Button | Enabled Condition |
-|--------|-------------------|
-| **Charge / Refund** | `state === IDLE && connected && amount > 0 && (tab !== REFUND \|\| orderNo)` |
-| **Abort** | `state === PROCESSING` |
-| **Keypad buttons** | `state === IDLE && connected` |
-| **Tab buttons (SALE/REFUND)** | `state === IDLE && connected` |
-| **POS Reconnect** | Always (control command) |
-| **Restart Server** | Always (emergency command) |
 
 ---
 
@@ -293,17 +294,19 @@ The webapp determines button states from the current `AppState`:
 
 ```
 ECPay-Server/
-├── server/                     # Go server
+├── server/                     # Go server (production-ready)
 │   ├── main.go                 # Entry point
 │   ├── api/
 │   │   └── websocket.go        # WebSocket handler
 │   ├── driver/
 │   │   ├── state.go            # State machine
 │   │   ├── manager.go          # Transaction manager
-│   │   ├── serial.go           # Serial port interface
-│   │   └── tcp.go              # TCP mock interface
+│   │   ├── scanner.go          # Auto-detection with ECHO handshake
+│   │   └── serial.go           # Serial port interface
 │   ├── protocol/
-│   │   └── packet.go           # RS232 packet builder
+│   │   ├── packet.go           # RS232 frame builder
+│   │   ├── parser.go           # Response parser
+│   │   └── crypto.go           # LRC & SHA-1
 │   ├── logger/
 │   │   └── logger.go           # Logging with rotation
 │   └── config/
@@ -313,76 +316,57 @@ ECPay-Server/
 │   ├── src/
 │   │   ├── App.tsx             # Main component
 │   │   ├── hooks/
-│   │   │   ├── useAppState.ts  # State machine hook
-│   │   │   ├── usePOS.ts       # WebSocket hook
+│   │   │   ├── useAppState.ts  # State machine
+│   │   │   ├── usePOS.ts       # WebSocket communication
 │   │   │   └── useOrders.ts    # Order history
 │   │   └── components/
 │   │       ├── Keypad.tsx      # Numeric keypad
-│   │       ├── OrderHistory.tsx # Transaction list
-│   │       └── ServerStatus.tsx # Status panel
+│   │       ├── OrderHistory.tsx
+│   │       └── ServerStatus.tsx
 │   └── package.json
 │
 ├── mock-pos/                   # Mock POS simulator
-│   └── main.go
+│   ├── main.go                 # PTY/TCP modes, full protocol
+│   └── go.mod
 │
-├── docs/                       # Documentation
-│   ├── RS232.md                # Protocol specification
+├── docs/
+│   ├── RS232.md                # ECPay RS232 protocol spec
 │   └── architecture.md         # This document
 │
-├── start.sh                    # Start all services
+├── start.sh                    # Start all services (PTY mode)
 └── stop.sh                     # Stop all services
 ```
 
 ---
 
-## Error Handling
+## Dependencies
 
-### Server-side Errors
+### Development Environment
 
-| Error Type | Behavior | Recovery |
-|------------|----------|----------|
-| Serial port error | `ERROR` state | Use reconnect |
-| ACK timeout (5s) | `TIMEOUT` state | Retry transaction |
-| Response timeout (65s) | `TIMEOUT` state | Retry transaction |
-| LRC checksum mismatch | `ERROR` state | Retry transaction |
-| Transaction in progress | Reject new request | Wait or abort |
+| Platform | Requirement | Installation |
+|----------|-------------|--------------|
+| macOS | socat | `brew install socat` |
+| Linux | socat | `apt install socat` |
+| Windows | N/A | Use real COM port or com0com |
 
-### Webapp-side Errors
+### Runtime
 
-| Error Type | Behavior | Recovery |
-|------------|----------|----------|
-| WebSocket disconnected | `DISCONNECTED` state | Auto-reconnect |
-| Parse error | Log to console | Ignore message |
-| Invalid response | Show error modal | Dismiss and retry |
-
----
-
-## Logging
-
-### Server Logs
-
-Location: `server/log/ecpay-server.log`
-
-**Log Levels:**
-
-- `[INFO]` - General operations
-- `[ERROR]` - Errors and failures
-- `[DEBUG]` - Detailed debugging
-- `[TRANS]` - Transaction events
-- `[PROTO]` - Protocol-level data
-
-**Auto-rotation:** When `log/` directory exceeds 10MB, old logs are deleted.
-
-### Webapp Logs
-
-- Displayed in ServerStatus panel (last 50 entries)
-- Also output to browser console
+| Component | Dependencies |
+|-----------|--------------|
+| Server | Go 1.21+, go.bug.st/serial |
+| Webapp | Node.js 18+, npm |
+| Mock POS | Go 1.21+, socat (PTY mode) |
 
 ---
 
 ## Quick Start
 
+### Development (with Mock POS)
+
 ```bash
+# Install socat (macOS)
+brew install socat
+
 # Start all services
 ./start.sh
 
@@ -393,15 +377,85 @@ open http://localhost:5173
 ./stop.sh
 ```
 
-**Manual Start:**
+### Production (Windows)
 
 ```bash
-# Terminal 1: Mock POS
-cd mock-pos && go run main.go
+# Build server
+cd server && go build -o ecpay-server.exe .
+
+# Run with auto-detection
+./ecpay-server.exe
+
+# Or specify COM port
+./ecpay-server.exe -port COM3
+```
+
+### Manual Start (Development)
+
+```bash
+# Terminal 1: Mock POS (PTY mode)
+cd mock-pos && ./mock-pos -mode pty
 
 # Terminal 2: Server
-cd server && go run main.go -mock
+cd server && ./ecpay-server
 
 # Terminal 3: Webapp
 cd webapp && npm run dev
 ```
+
+---
+
+## Error Handling
+
+### Server-side Errors
+
+| Error Type | State | Recovery |
+|------------|-------|----------|
+| Port open failed | - | Auto-retry via scanner |
+| Write error | ERROR | Trigger rescan |
+| ACK timeout (5s) | TIMEOUT | Retry transaction |
+| Response timeout (65s) | TIMEOUT | Retry transaction |
+| LRC checksum mismatch | ERROR | Retry transaction |
+| NAK received | ERROR | Check POS status |
+| Transaction in progress | - | Wait or abort |
+
+### Connection Recovery
+
+```
+Connection Lost
+      │
+      ▼
+  SetConnected(false)
+      │
+      ▼
+  Trigger Scanner
+      │
+      ▼
+  scanAndConnect()
+      │
+      ├─► Found: ConnectTo(port)
+      │
+      └─► Not Found: Retry in 20s
+```
+
+---
+
+## Logging
+
+### Server Logs
+
+**Location:** `server/log/ecpay-server.YYYY-MM-DD.log`
+
+**Log Levels:**
+- `[INFO]` - General operations
+- `[WARN]` - Warnings
+- `[ERROR]` - Errors and failures
+- `[DEBUG]` - Detailed debugging
+- `[TRANS]` - Transaction events
+
+**Auto-rotation:** Logs older than 30 days are deleted when directory exceeds 10MB.
+
+### Webapp Logs
+
+- Displayed in ServerStatus panel (last 50 entries)
+- Also output to browser console
