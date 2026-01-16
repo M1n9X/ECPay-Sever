@@ -13,12 +13,24 @@ import {
   History,
   Wifi,
   WifiOff,
+  RefreshCw,
+  XCircle,
+  Activity,
 } from "lucide-react";
 import { clsx } from "clsx";
 
 function App() {
-  const { connected, status, message, lastResult, sendCommand, reset } =
-    usePOS();
+  const {
+    connected,
+    status,
+    message,
+    lastResult,
+    serverState,
+    sendCommand,
+    sendAbort,
+    sendReconnect,
+    reset,
+  } = usePOS();
   const { orders, addOrder, markRefunded } = useOrders();
   const [tab, setTab] = useState<"SALE" | "REFUND">("SALE");
   const [amount, setAmount] = useState("");
@@ -57,7 +69,7 @@ function App() {
   useEffect(() => {
     if (status === "SUCCESS" && lastResult) {
       // Skip if we already processed this exact transaction
-      const currentApproval = lastResult.ApprovalNo;
+      const currentApproval = lastResult.ApprovalNo ?? null;
       if (processedApprovalRef.current === currentApproval) {
         return;
       }
@@ -95,6 +107,43 @@ function App() {
           <span className="text-sm font-medium text-zinc-400">
             {connected ? "Server Connected" : "Disconnected"}
           </span>
+          {/* Server State Indicator */}
+          {serverState && serverState.state !== "IDLE" && (
+            <>
+              <span className="text-zinc-600">|</span>
+              <Activity className="w-3 h-3 text-blue-400 animate-pulse" />
+              <span className="text-xs font-mono text-blue-400">
+                {serverState.state}
+              </span>
+              {serverState.timeout_ms && serverState.elapsed_ms && (
+                <span className="text-xs text-zinc-500">
+                  ({Math.floor(serverState.elapsed_ms / 1000)}s /{" "}
+                  {Math.floor(serverState.timeout_ms / 1000)}s)
+                </span>
+              )}
+            </>
+          )}
+        </div>
+        {/* Control Buttons */}
+        <div className="flex items-center gap-2">
+          {serverState && serverState.state !== "IDLE" && (
+            <button
+              onClick={sendAbort}
+              className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-red-500/30"
+            >
+              <XCircle className="w-3 h-3" />
+              Abort
+            </button>
+          )}
+          {!connected && (
+            <button
+              onClick={sendReconnect}
+              className="flex items-center gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-blue-500/30"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Reconnect
+            </button>
+          )}
         </div>
       </div>
 

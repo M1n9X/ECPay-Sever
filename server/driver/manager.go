@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bytes"
+	"context"
 	"ecpay-server/protocol"
 	"errors"
 	"fmt"
@@ -9,107 +10,207 @@ import (
 )
 
 type SerialManager struct {
-	Port Port
+	Port  Port
+	State *StateMachine
 }
 
 func NewSerialManager(port Port) *SerialManager {
-	return &SerialManager{Port: port}
+	sm := &SerialManager{
+		Port:  port,
+		State: NewStateMachine(),
+	}
+	sm.State.SetConnected(true)
+	return sm
 }
 
-// ExecuteTransaction 执行一笔完整的 ECPay 交易
-// 流程: Send -> Wait ACK -> Wait Response -> Send ACK
+// SetStateCallback sets the callback for state changes
+func (sm *SerialManager) SetStateCallback(cb StateChangeCallback) {
+	sm.State.SetCallback(cb)
+}
+
+// GetStatus returns the current status
+func (sm *SerialManager) GetStatus() StatusInfo {
+	return sm.State.GetStatusInfo()
+}
+
+// AbortTransaction attempts to cancel the current transaction
+func (sm *SerialManager) AbortTransaction() bool {
+	return sm.State.Abort()
+}
+
+// ExecuteTransaction executes a complete ECPay transaction with state machine
+// Flow: Send -> Wait ACK -> Wait Response -> Send ACK
 func (sm *SerialManager) ExecuteTransaction(req protocol.ECPayRequest) (map[string]string, error) {
-	// 1. 构建数据包
+	// Check if we can start a transaction
+	if err := sm.State.StartTransaction(req.TransType, req.Amount); err != nil {
+		return nil, err
+	}
+
+	// Ensure we always reset to IDLE when done
+	defer sm.State.Reset()
+
+	// Create context with overall timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
+	defer cancel()
+
+	// Get cancel channel for user abort
+	cancelChan := sm.State.GetCancelChannel()
+
+	// 1. Build packet
+	sm.State.TransitionTo(StateSending)
 	packet := protocol.BuildPacket(req)
 
-	// 2. 清空输入缓冲
+	// 2. Clear input buffer
 	sm.Port.ResetInputBuffer()
 
-	// 3. 发送数据
+	// 3. Send packet
 	_, err := sm.Port.Write(packet)
 	if err != nil {
+		sm.State.TransitionToError(fmt.Sprintf("write error: %v", err))
 		return nil, fmt.Errorf("write error: %v", err)
 	}
 
-	// 4. 等待 ACK (5s Timeout)
-	// 简单轮询读取
-	ackReceived := false
-	timeout := time.Now().Add(5 * time.Second)
-	buf := make([]byte, 1024)
-
-	for time.Now().Before(timeout) {
-		n, err := sm.Port.Read(buf)
-		if n > 0 {
-			// 检查是否包含 ACK or NAK
-			for i := 0; i < n; i++ {
-				if buf[i] == protocol.ACK {
-					ackReceived = true
-					break
-				}
-				if buf[i] == protocol.NAK {
-					return nil, errors.New("received NAK from POS")
-				}
-			}
+	// 4. Wait for ACK (5s timeout)
+	sm.State.TransitionTo(StateWaitACK)
+	ackResult, err := sm.waitForACK(ctx, cancelChan)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || err.Error() == "aborted" {
+			return nil, errors.New("transaction aborted")
 		}
-		if ackReceived {
-			break
-		}
-		if err != nil && err.Error() != "EOF" {
-			// ignore EOF for mock
-		}
-		time.Sleep(50 * time.Millisecond)
+		sm.State.TransitionToError(err.Error())
+		return nil, err
+	}
+	if !ackResult {
+		sm.State.TransitionToError("received NAK from POS")
+		return nil, errors.New("received NAK from POS")
 	}
 
-	if !ackReceived {
-		return nil, errors.New("timeout waiting for ACK")
-	}
-
-	// 5. 等待 Response (60s Timeout)
+	// 5. Wait for Response (65s timeout)
+	sm.State.TransitionTo(StateWaitResponse)
 	fmt.Println("ACK received. Waiting for POS Response...")
 
-	respBuffer := new(bytes.Buffer)
-	txTimeout := time.Now().Add(65 * time.Second)
+	responsePacket, err := sm.waitForResponse(ctx, cancelChan)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || err.Error() == "aborted" {
+			return nil, errors.New("transaction aborted")
+		}
+		if err.Error() == "timeout" {
+			sm.State.TransitionToTimeout()
+			return nil, errors.New("transaction timeout")
+		}
+		sm.State.TransitionToError(err.Error())
+		return nil, err
+	}
 
-	for time.Now().Before(txTimeout) {
-		n, err := sm.Port.Read(buf)
-		if n > 0 {
-			respBuffer.Write(buf[:n])
+	// 6. Parse response
+	sm.State.TransitionTo(StateParsing)
 
-			// 检查是否收到完整包 STX...ETX+LRC
-			data := respBuffer.Bytes()
-			idxStx := bytes.IndexByte(data, protocol.STX)
-			idxEtx := bytes.LastIndexByte(data, protocol.ETX)
+	// Validate packet
+	if !protocol.ValidatePacket(responsePacket) {
+		sm.State.TransitionToError("invalid packet checksum")
+		return nil, errors.New("invalid packet checksum")
+	}
 
-			if idxStx >= 0 && idxEtx > idxStx {
-				// 确保有 LRC (ETX 后一位)
-				if len(data) > idxEtx+1 {
-					// 提取完整包 (可能有多余数据在前后? 假设 clear buffer 后 STX 是第一个)
-					// 安全起见取 STX 到 LRC
-					packetData := data[idxStx : idxEtx+2] // +2 to include LRC
+	// Send ACK back
+	sm.Port.Write([]byte{protocol.ACK})
 
-					// 校验
-					if protocol.ValidatePacket(packetData) {
-						// 回复 ACK
-						sm.Port.Write([]byte{protocol.ACK})
+	// Parse response
+	result := protocol.ParseResponse(responsePacket)
 
-						// 解析
-						result := protocol.ParseResponse(packetData)
-						return result, nil
-					} else {
-						// 校验失败? 回复 NAK?
-						// sm.Port.Write([]byte{protocol.NAK})
-						// Continue waiting? or Fail?
-						fmt.Println("Received invalid packet checksum")
+	// Check response code
+	if respCode, ok := result["RespCode"]; ok && respCode != "0000" {
+		errMsg := fmt.Sprintf("transaction declined: %s", respCode)
+		sm.State.TransitionToError(errMsg)
+		return result, errors.New(errMsg)
+	}
+
+	// Success
+	sm.State.TransitionTo(StateSuccess)
+	return result, nil
+}
+
+// waitForACK waits for ACK/NAK with timeout and cancellation support
+func (sm *SerialManager) waitForACK(ctx context.Context, cancelChan <-chan struct{}) (bool, error) {
+	timeout := time.After(5 * time.Second)
+	buf := make([]byte, 64)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case <-cancelChan:
+			return false, errors.New("aborted")
+		case <-timeout:
+			return false, errors.New("timeout waiting for ACK")
+		default:
+			n, err := sm.Port.Read(buf)
+			if n > 0 {
+				for i := 0; i < n; i++ {
+					if buf[i] == protocol.ACK {
+						return true, nil
+					}
+					if buf[i] == protocol.NAK {
+						return false, nil
 					}
 				}
 			}
+			if err != nil && err.Error() != "EOF" {
+				// Ignore EOF for mock
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
-
-		if err != nil {
-			// handle error
-		}
-		time.Sleep(100 * time.Millisecond)
 	}
+}
 
-	return nil, errors.New("transaction timeout")
+// waitForResponse waits for complete response packet
+func (sm *SerialManager) waitForResponse(ctx context.Context, cancelChan <-chan struct{}) ([]byte, error) {
+	timeout := time.After(65 * time.Second)
+	buf := make([]byte, 1024)
+	respBuffer := new(bytes.Buffer)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-cancelChan:
+			return nil, errors.New("aborted")
+		case <-timeout:
+			return nil, errors.New("timeout")
+		default:
+			n, err := sm.Port.Read(buf)
+			if n > 0 {
+				respBuffer.Write(buf[:n])
+
+				// Check for complete packet
+				data := respBuffer.Bytes()
+				idxStx := bytes.IndexByte(data, protocol.STX)
+				idxEtx := bytes.LastIndexByte(data, protocol.ETX)
+
+				if idxStx >= 0 && idxEtx > idxStx && len(data) > idxEtx+1 {
+					// Extract complete packet
+					packetData := data[idxStx : idxEtx+2] // +2 to include LRC
+					return packetData, nil
+				}
+			}
+			if err != nil {
+				// Handle error
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
+// Reconnect attempts to reconnect to the POS
+func (sm *SerialManager) Reconnect() error {
+	// This is a placeholder - actual implementation depends on port type
+	sm.State.SetConnected(false)
+
+	// For TCP, we would close and reopen the connection
+	// For Serial, we might reset the port
+
+	// Simulate reconnection
+	time.Sleep(500 * time.Millisecond)
+	sm.State.SetConnected(true)
+
+	return nil
 }

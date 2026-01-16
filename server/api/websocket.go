@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,13 +17,13 @@ var upgrader = websocket.Upgrader{
 }
 
 type WebRequest struct {
-	Command string `json:"command"` // "SALE", "REFUND"
-	Amount  string `json:"amount"`  // e.g. "100"
+	Command string `json:"command"` // "SALE", "REFUND", "STATUS", "ABORT", "RECONNECT"
+	Amount  string `json:"amount"`
 	OrderNo string `json:"order_no"`
 }
 
 type WebResponse struct {
-	Status  string      `json:"status"` // "success", "error", "processing"
+	Status  string      `json:"status"` // "success", "error", "processing", "status_update"
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
@@ -30,10 +31,81 @@ type WebResponse struct {
 type Handler struct {
 	Manager *driver.SerialManager
 	mu      sync.Mutex // Ensure one transaction at a time per server instance
+
+	// Connected clients for broadcasting
+	clients   map[*websocket.Conn]bool
+	clientsMu sync.RWMutex
+
+	// Status broadcast ticker
+	broadcastTicker *time.Ticker
+	stopBroadcast   chan struct{}
 }
 
 func NewHandler(manager *driver.SerialManager) *Handler {
-	return &Handler{Manager: manager}
+	h := &Handler{
+		Manager:       manager,
+		clients:       make(map[*websocket.Conn]bool),
+		stopBroadcast: make(chan struct{}),
+	}
+
+	// Set up state change callback
+	manager.SetStateCallback(func(info driver.StatusInfo) {
+		h.broadcastStatus(info)
+	})
+
+	// Start periodic status broadcast (every 1s during active transactions)
+	h.broadcastTicker = time.NewTicker(1 * time.Second)
+	go h.periodicBroadcast()
+
+	return h
+}
+
+// periodicBroadcast sends status updates every second during active transactions
+func (h *Handler) periodicBroadcast() {
+	for {
+		select {
+		case <-h.broadcastTicker.C:
+			status := h.Manager.GetStatus()
+			if status.State != "IDLE" {
+				h.broadcastStatus(status)
+			}
+		case <-h.stopBroadcast:
+			h.broadcastTicker.Stop()
+			return
+		}
+	}
+}
+
+// broadcastStatus sends status to all connected clients
+func (h *Handler) broadcastStatus(info driver.StatusInfo) {
+	h.clientsMu.RLock()
+	defer h.clientsMu.RUnlock()
+
+	resp := WebResponse{
+		Status:  "status_update",
+		Message: info.Message,
+		Data:    info,
+	}
+
+	for conn := range h.clients {
+		if err := conn.WriteJSON(resp); err != nil {
+			log.Printf("Broadcast error: %v", err)
+		}
+	}
+}
+
+// addClient registers a new client
+func (h *Handler) addClient(conn *websocket.Conn) {
+	h.clientsMu.Lock()
+	defer h.clientsMu.Unlock()
+	h.clients[conn] = true
+}
+
+// removeClient unregisters a client
+func (h *Handler) removeClient(conn *websocket.Conn) {
+	h.clientsMu.Lock()
+	defer h.clientsMu.Unlock()
+	delete(h.clients, conn)
 }
 
 func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +114,17 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		log.Println("Upgrade error:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		h.removeClient(conn)
+		conn.Close()
+	}()
+
+	// Register client
+	h.addClient(conn)
+
+	// Send initial status
+	status := h.Manager.GetStatus()
+	h.sendJSON(conn, "status_update", status.Message, status)
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -56,7 +138,31 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		go h.handleRequest(conn, req)
+		// Handle different commands
+		switch req.Command {
+		case "STATUS":
+			status := h.Manager.GetStatus()
+			h.sendJSON(conn, "status_update", status.Message, status)
+		case "ABORT":
+			if h.Manager.AbortTransaction() {
+				h.sendJSON(conn, "success", "Transaction aborted", nil)
+			} else {
+				h.sendJSON(conn, "error", "No transaction to abort", nil)
+			}
+		case "RECONNECT":
+			go func() {
+				h.sendJSON(conn, "processing", "Reconnecting to POS...", nil)
+				if err := h.Manager.Reconnect(); err != nil {
+					h.sendJSON(conn, "error", err.Error(), nil)
+				} else {
+					h.sendJSON(conn, "success", "Reconnected to POS", nil)
+				}
+			}()
+		case "SALE", "REFUND", "SETTLEMENT", "ECHO":
+			go h.handleTransaction(conn, req)
+		default:
+			h.sendJSON(conn, "error", "Unknown Command", nil)
+		}
 	}
 }
 
@@ -66,18 +172,18 @@ func (h *Handler) sendJSON(conn *websocket.Conn, status, message string, data in
 		Message: message,
 		Data:    data,
 	}
-	conn.WriteJSON(resp)
+	if err := conn.WriteJSON(resp); err != nil {
+		log.Printf("Send error: %v", err)
+	}
 }
 
-func (h *Handler) handleRequest(conn *websocket.Conn, req WebRequest) {
+func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 	// Try to lock for transaction
 	if !h.mu.TryLock() {
 		h.sendJSON(conn, "error", "POS is busy", nil)
 		return
 	}
 	defer h.mu.Unlock()
-
-	h.sendJSON(conn, "processing", "Initializing transaction...", nil)
 
 	// Build Protocol Request
 	var ecpayReq protocol.ECPayRequest
@@ -95,24 +201,24 @@ func (h *Handler) handleRequest(conn *websocket.Conn, req WebRequest) {
 	case "SETTLEMENT":
 		ecpayReq.TransType = "50"
 		ecpayReq.HostID = "01"
-		ecpayReq.Amount = "0" // Must be zero for settlement
+		ecpayReq.Amount = "0"
 	case "ECHO":
 		ecpayReq.TransType = "80"
 		ecpayReq.HostID = "01"
-	default:
-		h.sendJSON(conn, "error", "Unknown Command", nil)
-		return
 	}
 
-	h.sendJSON(conn, "processing", "Request sent to POS. Waiting for operation...", nil)
-
-	// Execute
+	// Execute transaction
 	result, err := h.Manager.ExecuteTransaction(ecpayReq)
 	if err != nil {
-		h.sendJSON(conn, "error", err.Error(), nil)
+		h.sendJSON(conn, "error", err.Error(), result)
 		return
 	}
 
 	// Success
 	h.sendJSON(conn, "success", "Transaction Approved", result)
+}
+
+// Close stops the handler
+func (h *Handler) Close() {
+	close(h.stopBroadcast)
 }
