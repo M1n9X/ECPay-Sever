@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePOS } from "./hooks/usePOS";
 import { useOrders } from "./hooks/useOrders";
 import type { Order } from "./hooks/useOrders";
@@ -44,10 +44,25 @@ function App() {
     setOrderNo(order.orderNo);
     setRefundingOrderId(order.id);
   };
+  // Track which transaction we've already processed to avoid duplicates
+  const processedApprovalRef = useRef<string | null>(null);
+  const refundingOrderIdRef = useRef<string | null>(null);
+
+  // Sync ref with state for refundingOrderId
+  useEffect(() => {
+    refundingOrderIdRef.current = refundingOrderId;
+  }, [refundingOrderId]);
 
   // Save order when transaction succeeds
   useEffect(() => {
     if (status === "SUCCESS" && lastResult) {
+      // Skip if we already processed this exact transaction
+      const currentApproval = lastResult.ApprovalNo;
+      if (processedApprovalRef.current === currentApproval) {
+        return;
+      }
+      processedApprovalRef.current = currentApproval;
+
       const orderData = {
         type: (lastResult.TransType === "01" ? "SALE" : "REFUND") as
           | "SALE"
@@ -60,12 +75,12 @@ function App() {
       addOrder(orderData);
 
       // If this was a refund for an existing order, mark it
-      if (refundingOrderId && orderData.type === "REFUND") {
-        markRefunded(refundingOrderId);
+      if (refundingOrderIdRef.current && orderData.type === "REFUND") {
+        markRefunded(refundingOrderIdRef.current);
         setRefundingOrderId(null);
       }
     }
-  }, [status, lastResult, addOrder, markRefunded, refundingOrderId]);
+  }, [status, lastResult, addOrder, markRefunded]);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8 p-4 lg:p-8">
