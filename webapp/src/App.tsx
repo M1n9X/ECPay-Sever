@@ -83,7 +83,7 @@ function App() {
   }, [status, lastResult, addOrder, markRefunded]);
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8 p-4 lg:p-8">
+    <div className="h-screen bg-black text-white flex flex-col lg:flex-row items-center lg:items-start justify-center gap-4 p-3 lg:p-4 overflow-hidden">
       {/* Connection Status Header */}
       <div className="fixed top-4 left-4 right-4 flex items-center justify-between z-40">
         <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-800">
@@ -99,24 +99,24 @@ function App() {
       </div>
 
       {/* Main Card */}
-      <div className="max-w-md w-full mt-16 lg:mt-4">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-6 lg:p-8 shadow-2xl relative overflow-hidden">
+      <div className="max-w-md w-full mt-12 lg:mt-2">
+        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 lg:p-6 shadow-2xl relative overflow-hidden">
           {/* Background Gradient */}
           <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/10 to-transparent pointer-events-none" />
 
           {/* Title */}
-          <div className="flex items-center justify-between mb-6 relative z-10">
+          <div className="flex items-center justify-between mb-4 relative z-10">
             <div>
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
                 ECPay POS
               </h1>
               <p className="text-zinc-500 text-sm">RS232 Terminal</p>
             </div>
-            <Terminal className="text-blue-500 w-8 h-8 opacity-80" />
+            <Terminal className="text-blue-500 w-7 h-7 opacity-80" />
           </div>
 
           {/* Tabs */}
-          <div className="flex p-1 bg-surface rounded-xl mb-6 border border-zinc-800">
+          <div className="flex p-1 bg-surface rounded-xl mb-4 border border-zinc-800">
             <button
               onClick={() => {
                 setTab("SALE");
@@ -149,7 +149,7 @@ function App() {
 
           {/* Refund Order Input */}
           {tab === "REFUND" && (
-            <div className="mb-4">
+            <div className="mb-3">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">
                 Original Order No
               </label>
@@ -158,7 +158,7 @@ function App() {
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
                 placeholder="Enter Order No"
-                className="w-full mt-2 bg-surface border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm"
+                className="w-full mt-1 bg-surface border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm"
               />
             </div>
           )}
@@ -175,7 +175,7 @@ function App() {
           <button
             onClick={handleCheckout}
             disabled={!connected || !amount || (tab === "REFUND" && !orderNo)}
-            className="w-full mt-6 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-lg shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
+            className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-lg shadow-lg shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none"
           >
             {tab === "SALE" ? "Charge" : "Refund"} $
             {(parseInt(amount || "0") / 100).toFixed(2)}
@@ -184,9 +184,9 @@ function App() {
       </div>
 
       {/* Order History Panel */}
-      <div className="w-full max-w-md lg:w-80 mt-4 lg:mt-16">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 shadow-xl">
-          <div className="flex items-center gap-2 mb-4">
+      <div className="w-full max-w-md lg:w-80 mt-2 lg:mt-12">
+        <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 shadow-xl">
+          <div className="flex items-center gap-2 mb-3">
             <History className="w-4 h-4 text-zinc-500" />
             <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
               Recent Transactions
