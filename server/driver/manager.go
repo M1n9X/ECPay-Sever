@@ -3,6 +3,7 @@ package driver
 import (
 	"bytes"
 	"context"
+	"ecpay-server/logger"
 	"ecpay-server/protocol"
 	"errors"
 	"fmt"
@@ -41,13 +42,19 @@ func (sm *SerialManager) AbortTransaction() bool {
 // ExecuteTransaction executes a complete ECPay transaction with state machine
 // Flow: Send -> Wait ACK -> Wait Response -> Send ACK
 func (sm *SerialManager) ExecuteTransaction(req protocol.ECPayRequest) (map[string]string, error) {
+	logger.Info("Starting transaction: Type=%s Amount=%s OrderNo=%s", req.TransType, req.Amount, req.OrderNo)
+
 	// Check if we can start a transaction
 	if err := sm.State.StartTransaction(req.TransType, req.Amount); err != nil {
+		logger.Error("Cannot start transaction: %v", err)
 		return nil, err
 	}
 
 	// Ensure we always reset to IDLE when done
-	defer sm.State.Reset()
+	defer func() {
+		sm.State.Reset()
+		logger.Debug("Transaction state reset to IDLE")
+	}()
 
 	// Create context with overall timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
@@ -58,6 +65,7 @@ func (sm *SerialManager) ExecuteTransaction(req protocol.ECPayRequest) (map[stri
 
 	// 1. Build packet
 	sm.State.TransitionTo(StateSending)
+	logger.Debug("Building packet...")
 	packet := protocol.BuildPacket(req)
 
 	// 2. Clear input buffer
