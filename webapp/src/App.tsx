@@ -1,22 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePOS } from "./hooks/usePOS";
+import { useOrders } from "./hooks/useOrders";
+import type { Order } from "./hooks/useOrders";
 import { Keypad } from "./components/Keypad";
+import { OrderHistory } from "./components/OrderHistory";
 import {
   CreditCard,
-  RefreshCw,
   Terminal,
   CheckCircle2,
   RotateCcw,
   AlertTriangle,
+  History,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { clsx } from "clsx";
 
 function App() {
   const { connected, status, message, lastResult, sendCommand, reset } =
     usePOS();
+  const { orders, addOrder, markRefunded } = useOrders();
   const [tab, setTab] = useState<"SALE" | "REFUND">("SALE");
   const [amount, setAmount] = useState("");
   const [orderNo, setOrderNo] = useState("");
+  const [refundingOrderId, setRefundingOrderId] = useState<string | null>(null);
 
   const handleInput = (val: string) => {
     if (amount.length > 8) return;
@@ -31,42 +38,76 @@ function App() {
     sendCommand(tab, amount, tab === "REFUND" ? orderNo : undefined);
   };
 
+  const handleRefundOrder = (order: Order) => {
+    setTab("REFUND");
+    setAmount(order.amount.toString());
+    setOrderNo(order.orderNo);
+    setRefundingOrderId(order.id);
+  };
+
+  // Save order when transaction succeeds
+  useEffect(() => {
+    if (status === "SUCCESS" && lastResult) {
+      const orderData = {
+        type: (lastResult.TransType === "01" ? "SALE" : "REFUND") as
+          | "SALE"
+          | "REFUND",
+        amount: parseInt(lastResult.Amount || "0"),
+        orderNo: lastResult.OrderNo || "",
+        approvalNo: lastResult.ApprovalNo || "",
+        cardNo: lastResult.CardNo || "",
+      };
+      addOrder(orderData);
+
+      // If this was a refund for an existing order, mark it
+      if (refundingOrderId && orderData.type === "REFUND") {
+        markRefunded(refundingOrderId);
+        setRefundingOrderId(null);
+      }
+    }
+  }, [status, lastResult, addOrder, markRefunded, refundingOrderId]);
+
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 selection:bg-primary/30">
-      {/* Header */}
-      <div className="fixed top-6 left-6 flex items-center gap-3 bg-surface px-4 py-2 rounded-full border border-zinc-800 shadow-xl">
-        <div
-          className={clsx(
-            "w-2.5 h-2.5 rounded-full animate-pulse",
-            connected ? "bg-success" : "bg-error"
+    <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8 p-4 lg:p-8">
+      {/* Connection Status Header */}
+      <div className="fixed top-4 left-4 right-4 flex items-center justify-between z-40">
+        <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-800">
+          {connected ? (
+            <Wifi className="w-4 h-4 text-green-500" />
+          ) : (
+            <WifiOff className="w-4 h-4 text-red-500" />
           )}
-        ></div>
-        <span className="text-sm font-medium text-zinc-400">
-          {connected ? "POS Online" : "Disconnected"}
-        </span>
+          <span className="text-sm font-medium text-zinc-400">
+            {connected ? "Server Connected" : "Disconnected"}
+          </span>
+        </div>
       </div>
 
-      <div className="max-w-md w-full relative">
-        {/* Main Card */}
-        <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-8 shadow-2xl relative overflow-hidden">
+      {/* Main Card */}
+      <div className="max-w-md w-full mt-16 lg:mt-4">
+        <div className="bg-zinc-950 border border-zinc-800 rounded-[2rem] p-6 lg:p-8 shadow-2xl relative overflow-hidden">
           {/* Background Gradient */}
           <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-blue-500/10 to-transparent pointer-events-none" />
 
           {/* Title */}
-          <div className="flex items-center justify-between mb-8 relative z-10">
+          <div className="flex items-center justify-between mb-6 relative z-10">
             <div>
               <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-500">
                 ECPay POS
               </h1>
-              <p className="text-zinc-500 text-sm">RS232 Integrated Terminal</p>
+              <p className="text-zinc-500 text-sm">RS232 Terminal</p>
             </div>
             <Terminal className="text-blue-500 w-8 h-8 opacity-80" />
           </div>
 
           {/* Tabs */}
-          <div className="flex p-1 bg-surface rounded-xl mb-8 border border-zinc-800">
+          <div className="flex p-1 bg-surface rounded-xl mb-6 border border-zinc-800">
             <button
-              onClick={() => setTab("SALE")}
+              onClick={() => {
+                setTab("SALE");
+                setOrderNo("");
+                setRefundingOrderId(null);
+              }}
               className={clsx(
                 "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
                 tab === "SALE"
@@ -91,7 +132,7 @@ function App() {
             </button>
           </div>
 
-          {/* Refresh/Refund Input */}
+          {/* Refund Order Input */}
           {tab === "REFUND" && (
             <div className="mb-4">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest pl-1">
@@ -101,13 +142,13 @@ function App() {
                 type="text"
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
-                placeholder="Enter 20-digit Order No"
+                placeholder="Enter Order No"
                 className="w-full mt-2 bg-surface border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm"
               />
             </div>
           )}
 
-          {/* Keypad or Status */}
+          {/* Keypad */}
           <Keypad
             onInput={handleInput}
             onClear={handleClear}
@@ -127,9 +168,22 @@ function App() {
         </div>
       </div>
 
+      {/* Order History Panel */}
+      <div className="w-full max-w-md lg:w-80 mt-4 lg:mt-16">
+        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 shadow-xl">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="w-4 h-4 text-zinc-500" />
+            <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
+              Recent Transactions
+            </h2>
+          </div>
+          <OrderHistory orders={orders} onRefund={handleRefundOrder} />
+        </div>
+      </div>
+
       {/* Status Overlay Modal */}
       {status !== "IDLE" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center">
             {status === "PROCESSING" && (
               <>
@@ -141,7 +195,7 @@ function App() {
 
             {status === "SUCCESS" && (
               <>
-                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 mb-6 animate-in zoom-in duration-300">
+                <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center text-green-500 mb-6">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-bold mb-2">Approved</h3>
@@ -174,7 +228,11 @@ function App() {
                 </div>
 
                 <button
-                  onClick={reset}
+                  onClick={() => {
+                    reset();
+                    setAmount("");
+                    setOrderNo("");
+                  }}
                   className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl font-medium transition-colors"
                 >
                   Close
@@ -184,7 +242,7 @@ function App() {
 
             {status === "FAIL" && (
               <>
-                <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 mb-6 animate-in zoom-in duration-300">
+                <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center text-red-500 mb-6">
                   <AlertTriangle className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-bold mb-2">Transaction Failed</h3>
