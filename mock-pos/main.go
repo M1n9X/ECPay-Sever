@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
 	"strings"
@@ -33,9 +32,8 @@ const (
 // SimulationConfig controls mock behavior
 type SimulationConfig struct {
 	// Connection mode
-	Mode       string // "tcp" or "pty"
-	TCPPort    int    // TCP port (default 9999)
-	PTYSymlink string // Symlink path for PTY (e.g., /tmp/mock-pos)
+	Mode    string // "tcp" only for now (PTY requires platform-specific code)
+	TCPPort int    // TCP port (default 9999)
 
 	// Timing
 	ProcessingDelayMs   int  // Base processing delay (card swipe simulation)
@@ -59,9 +57,8 @@ var config SimulationConfig
 
 func main() {
 	// Parse command line flags
-	flag.StringVar(&config.Mode, "mode", "tcp", "Connection mode: 'tcp' or 'pty' (virtual serial port)")
-	flag.IntVar(&config.TCPPort, "tcp-port", 9999, "TCP port to listen on (tcp mode)")
-	flag.StringVar(&config.PTYSymlink, "pty-link", "/tmp/mock-pos-pty", "Symlink path for PTY device (pty mode)")
+	flag.StringVar(&config.Mode, "mode", "tcp", "Connection mode: 'tcp'")
+	flag.IntVar(&config.TCPPort, "port", 9999, "TCP port to listen on")
 	flag.IntVar(&config.ProcessingDelayMs, "delay", 2000, "Processing delay in ms")
 	flag.BoolVar(&config.ByteStreamDelay, "byte-delay", false, "Enable byte-level transmission delay")
 	flag.IntVar(&config.RandomDelayVariance, "delay-variance", 500, "Random delay variance in ms")
@@ -75,27 +72,24 @@ func main() {
 
 	printBanner()
 
-	switch config.Mode {
-	case "pty":
-		runPTYMode()
-	case "tcp":
-		fallthrough
-	default:
-		runTCPMode()
-	}
+	// Handle graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Println("\n[MockPOS] Shutting down...")
+		os.Exit(0)
+	}()
+
+	runTCPMode()
 }
 
 func printBanner() {
 	fmt.Println("╔════════════════════════════════════════════════════════════╗")
 	fmt.Println("║              Mock POS Simulator (ECPay RS232)              ║")
 	fmt.Println("╠════════════════════════════════════════════════════════════╣")
-	if config.Mode == "pty" {
-		fmt.Printf("║  Mode: PTY (Virtual Serial Port)                           ║\n")
-		fmt.Printf("║  PTY Link: %-48s ║\n", config.PTYSymlink)
-	} else {
-		fmt.Printf("║  Mode: TCP                                                  ║\n")
-		fmt.Printf("║  Listen Port: %-45d ║\n", config.TCPPort)
-	}
+	fmt.Printf("║  Mode: TCP                                                  ║\n")
+	fmt.Printf("║  Listen Port: %-45d ║\n", config.TCPPort)
 	fmt.Println("╠════════════════════════════════════════════════════════════╣")
 	fmt.Printf("║  Processing Delay  : %4d ms (±%d ms)                       ║\n",
 		config.ProcessingDelayMs, config.RandomDelayVariance)
@@ -103,6 +97,12 @@ func printBanner() {
 	fmt.Printf("║  Timeout Prob      : %5.1f%%                                 ║\n", config.TimeoutProbability*100)
 	fmt.Printf("║  Decline Prob      : %5.1f%%                                 ║\n", config.DeclineProbability*100)
 	fmt.Println("╚════════════════════════════════════════════════════════════╝")
+
+	if runtime.GOOS != "windows" {
+		fmt.Println("")
+		fmt.Println("NOTE: For development, Server should connect via TCP.")
+		fmt.Println("      Use: ./ecpay-server (with scanner finding tcp://localhost:9999)")
+	}
 }
 
 // ============================================================================
@@ -117,7 +117,7 @@ func runTCPMode() {
 	}
 	defer listener.Close()
 
-	fmt.Printf("\n[MockPOS] TCP mode listening on :%d\n", config.TCPPort)
+	fmt.Printf("\n[MockPOS] Listening on TCP :%d\n", config.TCPPort)
 	fmt.Println("[MockPOS] Waiting for connections...")
 
 	for {
@@ -141,110 +141,7 @@ func (t *tcpConn) Read(p []byte) (int, error) {
 }
 
 // ============================================================================
-// PTY Mode (Virtual Serial Port)
-// ============================================================================
-
-func runPTYMode() {
-	if runtime.GOOS == "windows" {
-		fmt.Println("ERROR: PTY mode is not supported on Windows.")
-		fmt.Println("       Use com0com to create virtual COM port pairs,")
-		fmt.Println("       then run mock-pos in TCP mode with socat bridge.")
-		os.Exit(1)
-	}
-
-	// Check if socat is available
-	if _, err := exec.LookPath("socat"); err != nil {
-		fmt.Println("ERROR: 'socat' is required for PTY mode but not found.")
-		fmt.Println("       Install with: brew install socat (macOS) or apt install socat (Linux)")
-		os.Exit(1)
-	}
-
-	// Create PTY pair using socat
-	// socat creates a PTY and links it to our stdin/stdout
-	fmt.Println("\n[MockPOS] Creating virtual serial port...")
-
-	// Remove old symlink if exists
-	os.Remove(config.PTYSymlink)
-
-	// Use socat to create PTY pair
-	// PTY,link=/tmp/mock-pos-pty,raw,echo=0 creates a PTY with symlink
-	// STDIO connects it to our process
-	cmd := exec.Command("socat", "-d", "-d",
-		fmt.Sprintf("PTY,link=%s,raw,echo=0,b115200", config.PTYSymlink),
-		"STDIO")
-
-	// Get stdin/stdout pipes
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		fmt.Printf("Failed to get stdin pipe: %v\n", err)
-		os.Exit(1)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Printf("Failed to get stdout pipe: %v\n", err)
-		os.Exit(1)
-	}
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Failed to start socat: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Wait for PTY to be created
-	time.Sleep(500 * time.Millisecond)
-
-	// Verify symlink exists
-	if _, err := os.Stat(config.PTYSymlink); os.IsNotExist(err) {
-		fmt.Printf("ERROR: PTY symlink not created at %s\n", config.PTYSymlink)
-		cmd.Process.Kill()
-		os.Exit(1)
-	}
-
-	fmt.Printf("[MockPOS] Virtual serial port created: %s\n", config.PTYSymlink)
-	fmt.Println("[MockPOS] Server can now connect to this port.")
-	fmt.Println("[MockPOS] Waiting for data...")
-
-	// Handle graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		fmt.Println("\n[MockPOS] Shutting down...")
-		cmd.Process.Kill()
-		os.Remove(config.PTYSymlink)
-		os.Exit(0)
-	}()
-
-	// Handle connection using the PTY
-	ptyConn := &ptyConnection{
-		reader: stdout,
-		writer: stdin,
-	}
-	handleConnection(ptyConn)
-
-	cmd.Wait()
-}
-
-type ptyConnection struct {
-	reader io.Reader
-	writer io.Writer
-}
-
-func (p *ptyConnection) Read(buf []byte) (int, error) {
-	return p.reader.Read(buf)
-}
-
-func (p *ptyConnection) Write(data []byte) (int, error) {
-	return p.writer.Write(data)
-}
-
-func (p *ptyConnection) Close() error {
-	return nil
-}
-
-// ============================================================================
-// Connection Handler (shared between TCP and PTY)
+// Connection Handler
 // ============================================================================
 
 type Connection interface {

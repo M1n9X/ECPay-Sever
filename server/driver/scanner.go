@@ -4,7 +4,6 @@ import (
 	"ecpay-server/logger"
 	"ecpay-server/protocol"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -12,7 +11,7 @@ import (
 	"go.bug.st/serial"
 )
 
-// Scanner handles auto-detection of POS devices on serial ports
+// Scanner handles auto-detection of POS devices
 type Scanner struct {
 	Manager *SerialManager
 	stop    chan struct{}
@@ -26,8 +25,6 @@ func NewScanner(manager *SerialManager) *Scanner {
 }
 
 // Start begins the scanning loop
-// 1. Initial burst scan (3 attempts with 1s interval)
-// 2. Periodic scan (every 20s if not connected)
 func (s *Scanner) Start() {
 	go func() {
 		logger.Info("Starting POS device scanner...")
@@ -62,21 +59,19 @@ func (s *Scanner) Stop() {
 	close(s.stop)
 }
 
-// scanAndConnect iterates over all serial ports to find a POS device
+// scanAndConnect finds and connects to a POS device
 func (s *Scanner) scanAndConnect() bool {
 	logger.Info("Scanning for POS device...")
 
-	// Get all candidate ports
 	ports := s.discoverPorts()
 
 	if len(ports) == 0 {
-		logger.Info("No serial ports found")
+		logger.Info("No candidate ports found")
 		return false
 	}
 
 	logger.Debug("Found %d candidate ports: %v", len(ports), ports)
 
-	// Probe each port with ECHO handshake
 	for _, portName := range ports {
 		logger.Debug("Probing port: %s", portName)
 		if s.probePort(portName) {
@@ -89,11 +84,11 @@ func (s *Scanner) scanAndConnect() bool {
 	return false
 }
 
-// discoverPorts finds all candidate serial ports
+// discoverPorts finds all candidate ports (serial + TCP mock)
 func (s *Scanner) discoverPorts() []string {
 	var ports []string
 
-	// 1. Get hardware serial ports from OS
+	// 1. Hardware serial ports
 	hwPorts, err := serial.GetPortsList()
 	if err != nil {
 		logger.Error("Failed to list serial ports: %v", err)
@@ -101,34 +96,30 @@ func (s *Scanner) discoverPorts() []string {
 		ports = append(ports, hwPorts...)
 	}
 
-	// 2. Add virtual serial ports (PTY symlinks for development)
-	if runtime.GOOS != "windows" {
-		virtualPorts := []string{
-			"/tmp/mock-pos-pty",   // Default mock-pos PTY location
-			"/tmp/virtual-serial", // Alternative location
-		}
-		for _, vp := range virtualPorts {
-			if _, err := os.Stat(vp); err == nil {
-				ports = append(ports, vp)
-			}
-		}
-	}
+	// 2. Mock POS TCP endpoint (for development)
+	// Always try localhost:9999 as a potential mock POS
+	ports = append(ports, "tcp://localhost:9999")
 
-	// 3. Filter ports
+	// 3. Filter and deduplicate
 	return filterPorts(ports)
 }
 
-// filterPorts filters serial ports based on OS-specific naming conventions
+// filterPorts filters ports based on OS conventions
 func filterPorts(ports []string) []string {
 	var filtered []string
 	seen := make(map[string]bool)
 
 	for _, port := range ports {
-		// Deduplicate
 		if seen[port] {
 			continue
 		}
 		seen[port] = true
+
+		// Always include TCP endpoints
+		if strings.HasPrefix(port, "tcp://") {
+			filtered = append(filtered, port)
+			continue
+		}
 
 		// Windows: COM ports
 		if runtime.GOOS == "windows" {
@@ -138,24 +129,17 @@ func filterPorts(ports []string) []string {
 			continue
 		}
 
-		// macOS/Linux
+		// macOS/Linux: filter by name
 		lower := strings.ToLower(port)
-
-		// Skip Bluetooth ports
 		if strings.Contains(lower, "bluetooth") {
 			continue
 		}
 
-		// Include:
-		// - USB-Serial adapters
-		// - Virtual PTY ports
-		// - Standard serial ports
 		if strings.Contains(lower, "ttyusb") ||
 			strings.Contains(lower, "ttyacm") ||
 			strings.Contains(lower, "usbserial") ||
 			strings.Contains(lower, "cu.") ||
-			strings.Contains(lower, "ttys") ||
-			strings.HasPrefix(port, "/tmp/") {
+			strings.Contains(lower, "ttys") {
 			filtered = append(filtered, port)
 		}
 	}
@@ -163,12 +147,7 @@ func filterPorts(ports []string) []string {
 	return filtered
 }
 
-// probePort attempts to connect and perform ECHO handshake to verify POS device
-// Returns true only if:
-// 1. Port can be opened
-// 2. ECHO command (TransType=80) is sent successfully
-// 3. ACK is received within timeout
-// 4. Response packet is received and validated
+// probePort performs ECHO handshake to verify POS device
 func (s *Scanner) probePort(portName string) bool {
 	// 1. Open Port
 	port, err := OpenSerial(portName, 115200)
@@ -178,86 +157,72 @@ func (s *Scanner) probePort(portName string) bool {
 	}
 	defer port.Close()
 
-	// 2. Clear input buffer
-	if err := port.ResetInputBuffer(); err != nil {
-		logger.Debug("Failed to reset buffer on %s: %v", portName, err)
-	}
+	// 2. Clear buffer
+	port.ResetInputBuffer()
 
-	// 3. Build and send ECHO Request (TransType=80)
+	// 3. Send ECHO Request (TransType=80)
 	req := protocol.ECPayRequest{
-		TransType: "80", // ECHO - connection test
-		HostID:    "01", // Credit Card
+		TransType: "80",
+		HostID:    "01",
 	}
 	packet := protocol.BuildPacket(req)
 
-	logger.Debug("Sending ECHO to %s (%d bytes)", portName, len(packet))
+	logger.Debug("Sending ECHO to %s", portName)
 	if _, err := port.Write(packet); err != nil {
-		logger.Debug("Failed to write to %s: %v", portName, err)
+		logger.Debug("Write failed on %s: %v", portName, err)
 		return false
 	}
 
-	// 4. Wait for ACK (500ms timeout for probing)
+	// 4. Wait for ACK (500ms)
 	if !s.waitForACK(port, 500*time.Millisecond) {
 		logger.Debug("No ACK from %s", portName)
 		return false
 	}
 	logger.Debug("ACK received from %s", portName)
 
-	// 5. Wait for ECHO Response (2s timeout for probing)
-	// Real POS should respond quickly to ECHO
-	responsePacket, err := s.waitForResponse(port, 2*time.Second)
+	// 5. Wait for Response (3s for probe)
+	responsePacket, err := s.waitForResponse(port, 3*time.Second)
 	if err != nil {
 		logger.Debug("No response from %s: %v", portName, err)
 		return false
 	}
 
-	// 6. Validate response packet
+	// 6. Validate packet
 	if !protocol.ValidatePacket(responsePacket) {
-		logger.Debug("Invalid response packet from %s", portName)
+		logger.Debug("Invalid packet from %s", portName)
 		return false
 	}
 
-	// 7. Parse and verify it's an ECHO response
+	// 7. Verify ECHO response
 	result := protocol.ParseResponse(responsePacket)
 	if result["TransType"] != "80" {
-		logger.Debug("Unexpected TransType from %s: %s", portName, result["TransType"])
+		logger.Debug("Not ECHO response from %s: %s", portName, result["TransType"])
 		return false
 	}
 
-	// 8. Check response code (0000 = success)
-	if result["RespCode"] != "0000" {
-		logger.Debug("ECHO failed on %s: RespCode=%s", portName, result["RespCode"])
-		// Still consider it a valid POS device, just might be busy
-	}
-
-	// 9. Send ACK to complete handshake
+	// 8. Send ACK
 	port.Write([]byte{protocol.ACK})
 
 	logger.Info("ECHO handshake successful on %s", portName)
 
-	// 10. Close probe connection and let Manager open it
+	// 9. Close and reconnect via Manager
 	port.Close()
-
 	return s.Manager.ConnectTo(portName)
 }
 
-// waitForACK waits for ACK byte within timeout
 func (s *Scanner) waitForACK(port Port, timeout time.Duration) bool {
 	buf := make([]byte, 64)
 	start := time.Now()
 
 	for time.Since(start) < timeout {
 		n, _ := port.Read(buf)
-		if n > 0 {
-			for i := 0; i < n; i++ {
-				if buf[i] == protocol.ACK {
-					return true
-				}
-				if buf[i] == protocol.NAK {
-					// NAK means device responded but rejected
-					logger.Debug("Received NAK (device present but rejected)")
-					return false
-				}
+		for i := 0; i < n; i++ {
+			if buf[i] == protocol.ACK {
+				return true
+			}
+			if buf[i] == protocol.NAK {
+				logger.Debug("Received NAK")
+				return false
 			}
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -265,7 +230,6 @@ func (s *Scanner) waitForACK(port Port, timeout time.Duration) bool {
 	return false
 }
 
-// waitForResponse waits for complete response packet within timeout
 func (s *Scanner) waitForResponse(port Port, timeout time.Duration) ([]byte, error) {
 	buf := make([]byte, 1024)
 	var respBuf []byte
@@ -276,9 +240,8 @@ func (s *Scanner) waitForResponse(port Port, timeout time.Duration) ([]byte, err
 		if n > 0 {
 			respBuf = append(respBuf, buf[:n]...)
 
-			// Check for complete packet (603 bytes: STX + 600 DATA + ETX + LRC)
+			// Look for complete 603-byte packet
 			if len(respBuf) >= 603 {
-				// Find STX
 				for i := 0; i <= len(respBuf)-603; i++ {
 					if respBuf[i] == protocol.STX {
 						return respBuf[i : i+603], nil
@@ -289,5 +252,5 @@ func (s *Scanner) waitForResponse(port Port, timeout time.Duration) ([]byte, err
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	return nil, fmt.Errorf("timeout waiting for response")
+	return nil, fmt.Errorf("timeout")
 }

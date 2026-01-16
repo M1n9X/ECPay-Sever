@@ -4,22 +4,22 @@
 
 The ECPay POS system consists of three main components that work together to process credit card transactions via RS232 protocol.
 
-### Development Environment (PTY Mode)
+### Development Environment
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         Development Environment                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  ┌──────────┐   Virtual Serial    ┌──────────┐   WebSocket  ┌─────────┐ │
+│  ┌──────────┐      TCP :9999      ┌──────────┐   WebSocket  ┌─────────┐ │
 │  │ Mock POS │ ◄─────────────────► │  Server  │ ◄──────────► │ Webapp  │ │
-│  │  (Go)    │  /tmp/mock-pos-pty  │   (Go)   │   :8989/ws   │ (React) │ │
-│  │          │   via socat PTY     │          │              │         │ │
+│  │  (Go)    │   tcp://localhost   │   (Go)   │   :8989/ws   │ (React) │ │
+│  │          │                     │          │              │         │ │
 │  └──────────┘                     └──────────┘              └─────────┘ │
 │                                                                          │
-│  * Mock POS creates virtual serial port using socat                      │
-│  * Server auto-detects PTY via ECHO handshake                           │
-│  * Same code path as production - no mock logic in Server               │
+│  * Mock POS listens on TCP :9999                                        │
+│  * Server auto-detects via ECHO handshake (same as production)          │
+│  * Scanner probes tcp://localhost:9999 alongside COM ports              │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -38,7 +38,8 @@ The ECPay POS system consists of three main components that work together to pro
 │  └──────────┘                     └──────────┘              └─────────┘ │
 │                                                                          │
 │  * Server auto-detects COM port via ECHO handshake                      │
-│  * Identical code to development - zero mock logic                      │
+│  * Same auto-detection logic as development                             │
+│  * TCP endpoint (localhost:9999) simply won't respond                   │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -115,14 +116,14 @@ The Server automatically discovers POS devices using ECHO handshake:
 │     │                                                                    │
 │     ├─► discoverPorts()                                                  │
 │     │      ├─► serial.GetPortsList()      // Hardware: COM3, ttyUSB0    │
-│     │      └─► Check /tmp/mock-pos-pty    // Virtual PTY                │
+│     │      └─► Add tcp://localhost:9999   // Mock POS endpoint          │
 │     │                                                                    │
 │     └─► For each port: probePort()                                       │
 │            │                                                             │
-│            ├─► OpenSerial(port, 115200)                                  │
+│            ├─► OpenSerial(port, 115200)   // Works for both serial/TCP  │
 │            ├─► Send ECHO request (TransType=80)                          │
 │            ├─► Wait for ACK (500ms timeout)                              │
-│            ├─► Wait for Response (2s timeout)                            │
+│            ├─► Wait for Response (3s timeout)                            │
 │            ├─► Validate LRC checksum                                     │
 │            ├─► Verify TransType=80 in response                           │
 │            ├─► Send ACK to complete handshake                            │
@@ -131,6 +132,10 @@ The Server automatically discovers POS devices using ECHO handshake:
 │  Timing:                                                                 │
 │    - Initial burst: 3 attempts, 1s apart                                │
 │    - Periodic scan: Every 20s if disconnected                           │
+│                                                                          │
+│  Port Types:                                                             │
+│    - Serial: COM3, /dev/ttyUSB0, /dev/cu.usbserial-*                    │
+│    - TCP: tcp://localhost:9999 (Mock POS)                               │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -326,7 +331,7 @@ ECPay-Server/
 │   └── package.json
 │
 ├── mock-pos/                   # Mock POS simulator
-│   ├── main.go                 # PTY/TCP modes, full protocol
+│   ├── main.go                 # TCP mode, full RS232 protocol
 │   └── go.mod
 │
 ├── docs/
@@ -341,21 +346,13 @@ ECPay-Server/
 
 ## Dependencies
 
-### Development Environment
-
-| Platform | Requirement | Installation |
-|----------|-------------|--------------|
-| macOS | socat | `brew install socat` |
-| Linux | socat | `apt install socat` |
-| Windows | N/A | Use real COM port or com0com |
-
 ### Runtime
 
 | Component | Dependencies |
 |-----------|--------------|
 | Server | Go 1.21+, go.bug.st/serial |
 | Webapp | Node.js 18+, npm |
-| Mock POS | Go 1.21+, socat (PTY mode) |
+| Mock POS | Go 1.21+ |
 
 ---
 
@@ -364,9 +361,6 @@ ECPay-Server/
 ### Development (with Mock POS)
 
 ```bash
-# Install socat (macOS)
-brew install socat
-
 # Start all services
 ./start.sh
 
@@ -383,20 +377,17 @@ open http://localhost:5173
 # Build server
 cd server && go build -o ecpay-server.exe .
 
-# Run with auto-detection
+# Run (auto-detects COM port via ECHO handshake)
 ./ecpay-server.exe
-
-# Or specify COM port
-./ecpay-server.exe -port COM3
 ```
 
 ### Manual Start (Development)
 
 ```bash
-# Terminal 1: Mock POS (PTY mode)
-cd mock-pos && ./mock-pos -mode pty
+# Terminal 1: Mock POS
+cd mock-pos && ./mock-pos
 
-# Terminal 2: Server
+# Terminal 2: Server (auto-detects Mock POS on tcp://localhost:9999)
 cd server && ./ecpay-server
 
 # Terminal 3: Webapp
