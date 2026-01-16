@@ -170,7 +170,7 @@ export const ServerStatus = ({
           {logs.length === 0 ? (
             <span className="text-zinc-600">No logs yet...</span>
           ) : (
-            logs.slice(-10).map((log, i) => (
+            [...logs].reverse().slice(0, 10).map((log, i) => (
               <div key={i} className="text-zinc-400 py-0.5">
                 {log}
               </div>
