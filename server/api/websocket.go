@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -23,9 +24,10 @@ type WebRequest struct {
 }
 
 type WebResponse struct {
-	Status  string      `json:"status"` // "success", "error", "processing", "status_update"
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Status      string      `json:"status"` // "success", "error", "processing", "status_update"
+	Message     string      `json:"message"`
+	CommandType string      `json:"command_type"` // "transaction", "control", "status"
+	Data        interface{} `json:"data,omitempty"`
 }
 
 type Handler struct {
@@ -124,7 +126,7 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	// Send initial status
 	status := h.Manager.GetStatus()
-	h.sendJSON(conn, "status_update", status.Message, status)
+	h.sendStatus(conn, status.Message, status)
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -134,7 +136,7 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 		var req WebRequest
 		if err := json.Unmarshal(msg, &req); err != nil {
-			h.sendJSON(conn, "error", "Invalid JSON", nil)
+			h.sendControl(conn, "error", "Invalid JSON", nil)
 			continue
 		}
 
@@ -142,45 +144,66 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		switch req.Command {
 		case "STATUS":
 			status := h.Manager.GetStatus()
-			h.sendJSON(conn, "status_update", status.Message, status)
+			h.sendStatus(conn, status.Message, status)
 		case "ABORT":
 			if h.Manager.AbortTransaction() {
-				h.sendJSON(conn, "success", "Transaction aborted", nil)
+				h.sendControl(conn, "success", "Transaction aborted", nil)
 			} else {
-				h.sendJSON(conn, "error", "No transaction to abort", nil)
+				h.sendControl(conn, "error", "No transaction to abort", nil)
 			}
 		case "RECONNECT":
 			go func() {
-				h.sendJSON(conn, "processing", "Reconnecting to POS...", nil)
+				h.sendControl(conn, "processing", "Reconnecting to POS...", nil)
 				if err := h.Manager.Reconnect(); err != nil {
-					h.sendJSON(conn, "error", err.Error(), nil)
+					h.sendControl(conn, "error", err.Error(), nil)
 				} else {
-					h.sendJSON(conn, "success", "Reconnected to POS", nil)
+					h.sendControl(conn, "success", "Reconnected to POS", nil)
 				}
+			}()
+		case "RESTART":
+			h.sendControl(conn, "processing", "Server restarting...", nil)
+			log.Println("RESTART command received - triggering server restart")
+			go func() {
+				// Give time for the message to be sent
+				time.Sleep(500 * time.Millisecond)
+				os.Exit(0) // Exit, expecting process manager to restart
 			}()
 		case "SALE", "REFUND", "SETTLEMENT", "ECHO":
 			go h.handleTransaction(conn, req)
 		default:
-			h.sendJSON(conn, "error", "Unknown Command", nil)
+			h.sendControl(conn, "error", "Unknown Command", nil)
 		}
 	}
 }
 
-func (h *Handler) sendJSON(conn *websocket.Conn, status, message string, data interface{}) {
+func (h *Handler) sendJSON(conn *websocket.Conn, status, message, commandType string, data interface{}) {
 	resp := WebResponse{
-		Status:  status,
-		Message: message,
-		Data:    data,
+		Status:      status,
+		Message:     message,
+		CommandType: commandType,
+		Data:        data,
 	}
 	if err := conn.WriteJSON(resp); err != nil {
 		log.Printf("Send error: %v", err)
 	}
 }
 
+func (h *Handler) sendControl(conn *websocket.Conn, status, message string, data interface{}) {
+	h.sendJSON(conn, status, message, "control", data)
+}
+
+func (h *Handler) sendTransaction(conn *websocket.Conn, status, message string, data interface{}) {
+	h.sendJSON(conn, status, message, "transaction", data)
+}
+
+func (h *Handler) sendStatus(conn *websocket.Conn, message string, data interface{}) {
+	h.sendJSON(conn, "status_update", message, "status", data)
+}
+
 func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 	// Try to lock for transaction
 	if !h.mu.TryLock() {
-		h.sendJSON(conn, "error", "POS is busy", nil)
+		h.sendTransaction(conn, "error", "POS is busy", nil)
 		return
 	}
 	defer h.mu.Unlock()
@@ -210,12 +233,12 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 	// Execute transaction
 	result, err := h.Manager.ExecuteTransaction(ecpayReq)
 	if err != nil {
-		h.sendJSON(conn, "error", err.Error(), result)
+		h.sendTransaction(conn, "error", err.Error(), result)
 		return
 	}
 
 	// Success
-	h.sendJSON(conn, "success", "Transaction Approved", result)
+	h.sendTransaction(conn, "success", "Transaction Approved", result)
 }
 
 // Close stops the handler
