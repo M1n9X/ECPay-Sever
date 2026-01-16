@@ -24,42 +24,16 @@ func main() {
 
 	logger.Info("ECPay POS Server starting...")
 	fmt.Println("ECPay POS Server starting...")
+	fmt.Println("Serial port auto-detection enabled")
 
-	// 3. Initialize Port based on mode
-	var port driver.Port
-	var err error
+	// 3. Initialize Serial Manager with auto-detection
+	// Port starts as nil, Scanner will auto-detect and connect
+	manager := driver.NewSerialManager(nil)
 
-	switch cfg.Mode {
-	case config.ModeTCP:
-		// TCP mode: connect directly to specified address
-		logger.Info("Mode: TCP (connecting to %s)", cfg.Port)
-		fmt.Printf("Mode: TCP (connecting to %s)\n", cfg.Port)
-		port, err = driver.OpenTCP(cfg.Port)
-		if err != nil {
-			logger.Error("Failed to connect: %v", err)
-			log.Fatalf("Failed to connect to %s: %v", cfg.Port, err)
-		}
-
-	case config.ModeSerial:
-		fallthrough
-	default:
-		// Serial mode: use auto-detection scanner
-		logger.Info("Mode: Serial (auto-detection enabled)")
-		fmt.Println("Mode: Serial (auto-detection enabled)")
-		// Port remains nil, Manager will start scanner
-	}
-
-	if port != nil {
-		defer port.Close()
-	}
-
-	// 4. Initialize Manager
-	manager := driver.NewSerialManager(port)
-
-	// 5. Initialize API Handler
+	// 4. Initialize API Handler
 	handler := api.NewHandler(manager)
 
-	// 6. Start HTTP Server
+	// 5. Start HTTP Server
 	http.HandleFunc("/ws", handler.ServeWS)
 
 	logger.Info("WebSocket server listening on %s", cfg.WSAddr)

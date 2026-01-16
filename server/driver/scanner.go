@@ -3,6 +3,8 @@ package driver
 import (
 	"ecpay-server/logger"
 	"ecpay-server/protocol"
+	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -64,22 +66,18 @@ func (s *Scanner) Stop() {
 func (s *Scanner) scanAndConnect() bool {
 	logger.Info("Scanning for POS device...")
 
-	ports, err := serial.GetPortsList()
-	if err != nil {
-		logger.Error("Failed to list serial ports: %v", err)
-		return false
-	}
+	// Get all candidate ports
+	ports := s.discoverPorts()
 
 	if len(ports) == 0 {
 		logger.Info("No serial ports found")
 		return false
 	}
 
-	// Filter ports based on OS conventions
-	filteredPorts := filterPorts(ports)
-	logger.Debug("Found %d candidate ports: %v", len(filteredPorts), filteredPorts)
+	logger.Debug("Found %d candidate ports: %v", len(ports), ports)
 
-	for _, portName := range filteredPorts {
+	// Probe each port with ECHO handshake
+	for _, portName := range ports {
 		logger.Debug("Probing port: %s", portName)
 		if s.probePort(portName) {
 			logger.Info("POS device found on %s", portName)
@@ -91,11 +89,47 @@ func (s *Scanner) scanAndConnect() bool {
 	return false
 }
 
+// discoverPorts finds all candidate serial ports
+func (s *Scanner) discoverPorts() []string {
+	var ports []string
+
+	// 1. Get hardware serial ports from OS
+	hwPorts, err := serial.GetPortsList()
+	if err != nil {
+		logger.Error("Failed to list serial ports: %v", err)
+	} else {
+		ports = append(ports, hwPorts...)
+	}
+
+	// 2. Add virtual serial ports (PTY symlinks for development)
+	if runtime.GOOS != "windows" {
+		virtualPorts := []string{
+			"/tmp/mock-pos-pty",   // Default mock-pos PTY location
+			"/tmp/virtual-serial", // Alternative location
+		}
+		for _, vp := range virtualPorts {
+			if _, err := os.Stat(vp); err == nil {
+				ports = append(ports, vp)
+			}
+		}
+	}
+
+	// 3. Filter ports
+	return filterPorts(ports)
+}
+
 // filterPorts filters serial ports based on OS-specific naming conventions
 func filterPorts(ports []string) []string {
 	var filtered []string
+	seen := make(map[string]bool)
 
 	for _, port := range ports {
+		// Deduplicate
+		if seen[port] {
+			continue
+		}
+		seen[port] = true
+
 		// Windows: COM ports
 		if runtime.GOOS == "windows" {
 			if strings.HasPrefix(strings.ToUpper(port), "COM") {
@@ -104,7 +138,7 @@ func filterPorts(ports []string) []string {
 			continue
 		}
 
-		// macOS/Linux: filter out Bluetooth and other non-serial devices
+		// macOS/Linux
 		lower := strings.ToLower(port)
 
 		// Skip Bluetooth ports
@@ -112,11 +146,16 @@ func filterPorts(ports []string) []string {
 			continue
 		}
 
-		// Include common USB-Serial adapters
-		if strings.Contains(lower, "ttyusb") || // Linux USB-Serial
-			strings.Contains(lower, "ttyacm") || // Linux ACM devices
-			strings.Contains(lower, "usbserial") || // macOS USB-Serial
-			strings.Contains(lower, "cu.") { // macOS serial ports
+		// Include:
+		// - USB-Serial adapters
+		// - Virtual PTY ports
+		// - Standard serial ports
+		if strings.Contains(lower, "ttyusb") ||
+			strings.Contains(lower, "ttyacm") ||
+			strings.Contains(lower, "usbserial") ||
+			strings.Contains(lower, "cu.") ||
+			strings.Contains(lower, "ttys") ||
+			strings.HasPrefix(port, "/tmp/") {
 			filtered = append(filtered, port)
 		}
 	}
@@ -124,7 +163,12 @@ func filterPorts(ports []string) []string {
 	return filtered
 }
 
-// probePort attempts to connect and send ECHO command to verify POS device
+// probePort attempts to connect and perform ECHO handshake to verify POS device
+// Returns true only if:
+// 1. Port can be opened
+// 2. ECHO command (TransType=80) is sent successfully
+// 3. ACK is received within timeout
+// 4. Response packet is received and validated
 func (s *Scanner) probePort(portName string) bool {
 	// 1. Open Port
 	port, err := OpenSerial(portName, 115200)
@@ -135,55 +179,115 @@ func (s *Scanner) probePort(portName string) bool {
 	defer port.Close()
 
 	// 2. Clear input buffer
-	port.ResetInputBuffer()
+	if err := port.ResetInputBuffer(); err != nil {
+		logger.Debug("Failed to reset buffer on %s: %v", portName, err)
+	}
 
-	// 3. Send ECHO Request (TransType 80)
+	// 3. Build and send ECHO Request (TransType=80)
 	req := protocol.ECPayRequest{
-		TransType: "80", // ECHO
+		TransType: "80", // ECHO - connection test
 		HostID:    "01", // Credit Card
 	}
 	packet := protocol.BuildPacket(req)
 
+	logger.Debug("Sending ECHO to %s (%d bytes)", portName, len(packet))
 	if _, err := port.Write(packet); err != nil {
 		logger.Debug("Failed to write to %s: %v", portName, err)
 		return false
 	}
 
 	// 4. Wait for ACK (500ms timeout for probing)
-	ackBuf := make([]byte, 64)
-	ackReceived := false
-	start := time.Now()
-
-	for time.Since(start) < 500*time.Millisecond {
-		n, _ := port.Read(ackBuf)
-		if n > 0 {
-			for i := 0; i < n; i++ {
-				if ackBuf[i] == protocol.ACK {
-					ackReceived = true
-					break
-				}
-				if ackBuf[i] == protocol.NAK {
-					// NAK means device responded but rejected - still a valid POS
-					logger.Debug("Received NAK from %s (device present but rejected ECHO)", portName)
-					ackReceived = true
-					break
-				}
-			}
-		}
-		if ackReceived {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	if !s.waitForACK(port, 500*time.Millisecond) {
+		logger.Debug("No ACK from %s", portName)
+		return false
 	}
+	logger.Debug("ACK received from %s", portName)
 
-	if !ackReceived {
-		logger.Debug("No response from %s", portName)
+	// 5. Wait for ECHO Response (2s timeout for probing)
+	// Real POS should respond quickly to ECHO
+	responsePacket, err := s.waitForResponse(port, 2*time.Second)
+	if err != nil {
+		logger.Debug("No response from %s: %v", portName, err)
 		return false
 	}
 
-	// 5. Device found - close probe connection and let Manager open it
-	// Note: There's a small window between close and reopen, but RS232 handles this fine
+	// 6. Validate response packet
+	if !protocol.ValidatePacket(responsePacket) {
+		logger.Debug("Invalid response packet from %s", portName)
+		return false
+	}
+
+	// 7. Parse and verify it's an ECHO response
+	result := protocol.ParseResponse(responsePacket)
+	if result["TransType"] != "80" {
+		logger.Debug("Unexpected TransType from %s: %s", portName, result["TransType"])
+		return false
+	}
+
+	// 8. Check response code (0000 = success)
+	if result["RespCode"] != "0000" {
+		logger.Debug("ECHO failed on %s: RespCode=%s", portName, result["RespCode"])
+		// Still consider it a valid POS device, just might be busy
+	}
+
+	// 9. Send ACK to complete handshake
+	port.Write([]byte{protocol.ACK})
+
+	logger.Info("ECHO handshake successful on %s", portName)
+
+	// 10. Close probe connection and let Manager open it
 	port.Close()
 
 	return s.Manager.ConnectTo(portName)
+}
+
+// waitForACK waits for ACK byte within timeout
+func (s *Scanner) waitForACK(port Port, timeout time.Duration) bool {
+	buf := make([]byte, 64)
+	start := time.Now()
+
+	for time.Since(start) < timeout {
+		n, _ := port.Read(buf)
+		if n > 0 {
+			for i := 0; i < n; i++ {
+				if buf[i] == protocol.ACK {
+					return true
+				}
+				if buf[i] == protocol.NAK {
+					// NAK means device responded but rejected
+					logger.Debug("Received NAK (device present but rejected)")
+					return false
+				}
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return false
+}
+
+// waitForResponse waits for complete response packet within timeout
+func (s *Scanner) waitForResponse(port Port, timeout time.Duration) ([]byte, error) {
+	buf := make([]byte, 1024)
+	var respBuf []byte
+	start := time.Now()
+
+	for time.Since(start) < timeout {
+		n, _ := port.Read(buf)
+		if n > 0 {
+			respBuf = append(respBuf, buf[:n]...)
+
+			// Check for complete packet (603 bytes: STX + 600 DATA + ETX + LRC)
+			if len(respBuf) >= 603 {
+				// Find STX
+				for i := 0; i <= len(respBuf)-603; i++ {
+					if respBuf[i] == protocol.STX {
+						return respBuf[i : i+603], nil
+					}
+				}
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	return nil, fmt.Errorf("timeout waiting for response")
 }
