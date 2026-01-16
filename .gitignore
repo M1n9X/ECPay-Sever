@@ -8,6 +8,7 @@
 *.so
 *.dylib
 ecpay-server
+mock-pos/mock-pos
 
 # Test binary, built with `go test -c`
 *.test
