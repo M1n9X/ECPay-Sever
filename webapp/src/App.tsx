@@ -60,9 +60,10 @@ function App() {
         serverState: ServerStateString,
         message: string,
         elapsed_ms: number,
-        timeout_ms?: number
+        timeout_ms?: number,
+        is_connected?: boolean
       ) => {
-        updateServerState(serverState, message, elapsed_ms, timeout_ms);
+        updateServerState(serverState, message, elapsed_ms, timeout_ms, is_connected);
       },
       onTransactionSuccess: (result: TransactionResult) => {
         transactionSuccess(result);
@@ -169,14 +170,43 @@ function App() {
       {/* Connection Status Header */}
       <div className="fixed top-4 left-4 right-4 flex items-center justify-between z-40">
         <div className="flex items-center gap-3 bg-zinc-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-800">
-          {state.connected ? (
-            <Wifi className="w-4 h-4 text-green-500" />
-          ) : (
-            <WifiOff className="w-4 h-4 text-red-500" />
-          )}
-          <span className="text-sm font-medium text-zinc-400">
-            {state.connected ? "Server Connected" : "Disconnected"}
-          </span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {state.connected ? (
+                <Wifi className="w-4 h-4 text-green-500" />
+              ) : (
+                <WifiOff className="w-4 h-4 text-red-500" />
+              )}
+              <span
+                className={clsx(
+                  "text-sm font-medium",
+                  state.connected ? "text-green-400" : "text-red-400"
+                )}
+              >
+                {state.connected ? "Server Connected" : "Server Disconnected"}
+              </span>
+            </div>
+            {state.connected && (
+              <div className="flex items-center gap-2">
+                <div
+                  className={clsx(
+                    "w-2 h-2 rounded-full",
+                    state.deviceConnected ? "bg-green-500" : "bg-yellow-500"
+                  )}
+                />
+                <span
+                  className={clsx(
+                    "text-sm font-medium",
+                    state.deviceConnected ? "text-green-400" : "text-yellow-400"
+                  )}
+                >
+                  {state.deviceConnected
+                    ? "Device Connected"
+                    : "Device Missing"}
+                </span>
+              </div>
+            )}
+          </div>
           {/* Server State Indicator - Show when processing */}
           {state.appState === "PROCESSING" && (
             <>
@@ -194,7 +224,7 @@ function App() {
             </>
           )}
         </div>
-        {/* Control Buttons */}
+        {/* Control Buttons (Header) */}
         <div className="flex items-center gap-2">
           {canAbort && (
             <button
@@ -318,8 +348,9 @@ function App() {
             message: state.message,
             elapsed_ms: state.elapsed_ms,
             timeout_ms: state.timeout_ms ?? undefined,
-            is_connected: state.connected,
+            is_connected: state.deviceConnected,
           }}
+          deviceConnected={state.deviceConnected}
           logs={logs}
           onAbort={sendAbort}
           onReconnect={sendReconnect}

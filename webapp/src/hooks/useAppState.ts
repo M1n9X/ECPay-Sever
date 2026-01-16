@@ -80,6 +80,7 @@ export interface TransactionResult {
 export interface AppStateData {
   // Connection
   connected: boolean;
+  deviceConnected: boolean;
 
   // Transaction state (aligned with server)
   appState: AppState;
@@ -108,6 +109,7 @@ export type AppEvent =
       message: string;
       elapsed_ms: number;
       timeout_ms?: number;
+      is_connected: boolean;
     }
   | { type: "TRANSACTION_START" }
   | { type: "TRANSACTION_SUCCESS"; result: TransactionResult }
@@ -128,6 +130,7 @@ export type AppEvent =
 // Initial state
 const initialState: AppStateData = {
   connected: false,
+  deviceConnected: false,
   appState: "DISCONNECTED",
   serverState: "IDLE",
   message: "",
@@ -172,6 +175,7 @@ function reducer(state: AppStateData, event: AppEvent): AppStateData {
         message: event.message,
         elapsed_ms: event.elapsed_ms,
         timeout_ms: event.timeout_ms ?? null,
+        deviceConnected: event.is_connected,
       };
     }
 
@@ -277,6 +281,7 @@ function reducer(state: AppStateData, event: AppEvent): AppStateData {
 // Derived state helpers
 export function canSubmit(state: AppStateData): boolean {
   if (!state.connected) return false;
+  if (!state.deviceConnected) return false;
   if (state.appState !== "IDLE") return false;
 
   const amount = parseInt(state.form.amount || "0");
@@ -312,7 +317,8 @@ export function useAppState() {
       serverState: ServerStateString,
       message: string,
       elapsed_ms: number,
-      timeout_ms?: number
+      timeout_ms?: number,
+      is_connected: boolean = false
     ) => {
       dispatch({
         type: "SERVER_STATE_UPDATE",
@@ -320,6 +326,7 @@ export function useAppState() {
         message,
         elapsed_ms,
         timeout_ms,
+        is_connected,
       });
     },
     []

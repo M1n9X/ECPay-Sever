@@ -3,8 +3,6 @@ import {
   Activity,
   RefreshCw,
   XCircle,
-  Wifi,
-  WifiOff,
   Server,
   Clock,
   AlertCircle,
@@ -21,6 +19,7 @@ interface ServerStateInfo {
 
 interface ServerStatusProps {
   connected: boolean;
+  deviceConnected: boolean;
   serverState: ServerStateInfo | null;
   logs: string[];
   onAbort: () => void;
@@ -41,6 +40,7 @@ const stateColors: Record<string, string> = {
 
 export const ServerStatus = ({
   connected,
+  deviceConnected,
   serverState,
   logs,
   onAbort,
@@ -63,22 +63,6 @@ export const ServerStatus = ({
           <h2 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">
             Server Status
           </h2>
-        </div>
-        {/* Connection Indicator */}
-        <div className="flex items-center gap-1.5">
-          {connected ? (
-            <Wifi className="w-3 h-3 text-green-500" />
-          ) : (
-            <WifiOff className="w-3 h-3 text-red-500" />
-          )}
-          <span
-            className={clsx(
-              "text-xs font-medium",
-              connected ? "text-green-400" : "text-red-400"
-            )}
-          >
-            {connected ? "Online" : "Offline"}
-          </span>
         </div>
       </div>
 
@@ -139,21 +123,32 @@ export const ServerStatus = ({
           className="flex-1 flex items-center justify-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-lg text-xs font-medium transition-colors border border-blue-500/20"
         >
           <RefreshCw className="w-3 h-3" />
-          POS Reconnect
+          Server Reconnect
         </button>
-        <button
-          onClick={onAbort}
-          disabled={!isProcessing}
-          className={clsx(
-            "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border",
-            isProcessing
-              ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20"
-              : "bg-zinc-800/50 text-zinc-600 border-zinc-700 cursor-not-allowed"
-          )}
-        >
-          <XCircle className="w-3 h-3" />
-          Abort
-        </button>
+        {!deviceConnected ? (
+          <button
+            onClick={onReconnect}
+            disabled={!connected}
+            className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 px-3 py-2 rounded-lg text-xs font-medium transition-colors border border-yellow-500/20"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Device Reconnect
+          </button>
+        ) : (
+          <button
+            onClick={onAbort}
+            disabled={!isProcessing}
+            className={clsx(
+              "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border",
+              isProcessing
+                ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/20"
+                : "bg-zinc-800/50 text-zinc-600 border-zinc-700 cursor-not-allowed"
+            )}
+          >
+            <XCircle className="w-3 h-3" />
+            Abort
+          </button>
+        )}
       </div>
 
       {/* Restart Server Button */}
@@ -177,9 +172,6 @@ export const ServerStatus = ({
           ) : (
             logs.slice(-10).map((log, i) => (
               <div key={i} className="text-zinc-400 py-0.5">
-                <span className="text-zinc-600 mr-2">
-                  {new Date().toLocaleTimeString()}
-                </span>
                 {log}
               </div>
             ))

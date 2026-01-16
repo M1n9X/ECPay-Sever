@@ -35,7 +35,8 @@ export interface POSCallbacks {
     state: ServerStateString,
     message: string,
     elapsed_ms: number,
-    timeout_ms?: number
+    timeout_ms?: number,
+    is_connected?: boolean
   ) => void;
   onTransactionSuccess: (result: TransactionResult) => void;
   onTransactionError: (error: string, result?: TransactionResult) => void;
@@ -97,7 +98,8 @@ export function usePOS(callbacks: POSCallbacks) {
                   (resp.data.state as ServerStateString) || "IDLE",
                   resp.message,
                   resp.data.elapsed_ms || 0,
-                  resp.data.timeout_ms
+                  resp.data.timeout_ms,
+                  resp.data.is_connected || false
                 );
               }
               break;
@@ -186,30 +188,30 @@ export function usePOS(callbacks: POSCallbacks) {
   // Send control commands
   const sendAbort = useCallback(() => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-    addLog("Sending ABORT");
+    addLog("Requesting Transaction Abort...");
     ws.current.send(JSON.stringify({ command: "ABORT" }));
   }, [addLog]);
 
   const sendReconnect = useCallback(() => {
     // If connected, send command to server to reconnect to POS
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      addLog("Sending RECONNECT (POS)");
+      addLog("Requesting Device Reconnect...");
       ws.current.send(JSON.stringify({ command: "RECONNECT" }));
     } else {
       // If disconnected, try to reconnect WebSocket
-      addLog("Reconnecting to Server...");
+      addLog("Attempting Server Reconnect...");
       setReconnectCount((c) => c + 1);
     }
   }, [addLog]);
 
   const sendRestart = useCallback(() => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      addLog("Sending RESTART (Server)");
+      addLog("Requesting Server Restart...");
       ws.current.send(JSON.stringify({ command: "RESTART" }));
     } else {
       // If disconnected, we can't tell server to restart, but we can try to reconnect WS
       // Maybe the server is back up?
-      addLog("Reconnecting to Server...");
+      addLog("Attempting Server Reconnect...");
       setReconnectCount((c) => c + 1);
     }
   }, [addLog]);

@@ -14,6 +14,7 @@ echo "=========================================="
 
 # Kill any existing processes on our ports
 echo "Cleaning up existing processes..."
+pkill -f run_dev.sh || true
 lsof -ti:9999 | xargs kill -9 2>/dev/null || true
 lsof -ti:8989 | xargs kill -9 2>/dev/null || true
 lsof -ti:5173 | xargs kill -9 2>/dev/null || true
@@ -38,7 +39,7 @@ fi
 echo "[2/3] Starting Server in Mock Mode (port 8989)..."
 cd "$SCRIPT_DIR/server"
 # Use run_dev.sh to support restart
-./run_dev.sh -mock > "$LOG_DIR/server.log" 2>&1 &
+./run_dev.sh > "$LOG_DIR/server.log" 2>&1 &
 SERVER_PID=$!
 echo "      Server Runner PID: $SERVER_PID"
 sleep 2

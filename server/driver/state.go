@@ -108,6 +108,13 @@ func (sm *StateMachine) SetConnected(connected bool) {
 	}
 }
 
+// IsConnected returns the current connection status
+func (sm *StateMachine) IsConnected() bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.isConnected
+}
+
 // GetState returns the current state
 func (sm *StateMachine) GetState() TransactionState {
 	sm.mu.RLock()

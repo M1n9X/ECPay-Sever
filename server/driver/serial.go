@@ -22,6 +22,13 @@ func OpenSerial(portName string, baudRate int) (Port, error) {
 		Parity:   serial.NoParity,
 		StopBits: serial.OneStopBit,
 	}
+
+	// Intercept MOCK_POS for testing Auto-Detection logic
+	if portName == "MOCK_POS" {
+		fmt.Println("Connecting to Mock POS (TCP)...")
+		return OpenTCP("localhost:9999")
+	}
+
 	port, err := serial.Open(portName, mode)
 	if err != nil {
 		return nil, err

@@ -7,21 +7,66 @@ import (
 	"ecpay-server/protocol"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
 type SerialManager struct {
-	Port  Port
-	State *StateMachine
+	Port    Port
+	State   *StateMachine
+	Scanner *Scanner
+	mu      sync.Mutex // Protects Port access during reconnection
 }
 
-func NewSerialManager(port Port) *SerialManager {
+func NewSerialManager(initialPort Port) *SerialManager {
 	sm := &SerialManager{
-		Port:  port,
+		Port:  initialPort,
 		State: NewStateMachine(),
 	}
-	sm.State.SetConnected(true)
+
+	if initialPort != nil {
+		sm.State.SetConnected(true)
+	} else {
+		sm.State.SetConnected(false)
+		// Start scanner if no initial port
+		sm.Scanner = NewScanner(sm)
+		sm.Scanner.Start()
+	}
+
 	return sm
+}
+
+// ConnectTo connects to a specific serial port
+func (sm *SerialManager) ConnectTo(portName string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if sm.Port != nil {
+		sm.Port.Close()
+	}
+
+	logger.Info("Connecting to %s...", portName)
+	port, err := OpenSerial(portName, 115200)
+	if err != nil {
+		logger.Error("Failed to connect to %s: %v", portName, err)
+		return false
+	}
+
+	sm.Port = port
+	sm.State.SetConnected(true)
+	return true
+}
+
+// IsConnected checks if a device is currently connected
+func (sm *SerialManager) IsConnected() bool {
+	return sm.State.IsConnected() // State machine tracks this
+}
+
+// ForceRescan triggers a manual scan
+func (sm *SerialManager) ForceRescan() {
+	if sm.Scanner != nil {
+		go sm.Scanner.scanAndConnect()
+	}
 }
 
 // SetStateCallback sets the callback for state changes
@@ -216,15 +261,17 @@ func (sm *SerialManager) waitForResponse(ctx context.Context, cancelChan <-chan 
 
 // Reconnect attempts to reconnect to the POS
 func (sm *SerialManager) Reconnect() error {
-	// This is a placeholder - actual implementation depends on port type
 	sm.State.SetConnected(false)
 
-	// For TCP, we would close and reopen the connection
-	// For Serial, we might reset the port
+	// If using scanner (Real Mode), force a rescan
+	if sm.Scanner != nil {
+		logger.Info("Forcing scanner rescan...")
+		sm.ForceRescan()
+		return nil
+	}
 
-	// Simulate reconnection
+	// Mock Mode Simulation
 	time.Sleep(500 * time.Millisecond)
 	sm.State.SetConnected(true)
-
 	return nil
 }

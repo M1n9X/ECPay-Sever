@@ -37,15 +37,14 @@ func main() {
 			log.Fatalf("Failed to connect to Mock POS: %v", err)
 		}
 	} else {
-		logger.Info("Opening Serial Port: %s", cfg.Port)
-		fmt.Printf("Opening Serial Port: %s\n", cfg.Port)
-		port, err = driver.OpenSerial(cfg.Port, cfg.BaudRate)
-		if err != nil {
-			logger.Error("Failed to open serial port: %v", err)
-			log.Fatalf("Failed to open serial port: %v", err)
-		}
+		logger.Info("Starting in REAL MODE with Auto-Detection enabled")
+		fmt.Println("Starting in REAL MODE with Auto-Detection enabled")
+		// Port remains nil, Manager will start scanner
 	}
-	defer port.Close()
+
+	if port != nil {
+		defer port.Close()
+	}
 
 	// 4. Initialize Manager
 	manager := driver.NewSerialManager(port)
