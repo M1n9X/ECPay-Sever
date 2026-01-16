@@ -85,20 +85,21 @@ The server bridges the webapp and POS terminal:
 
 ### 3. Mock POS (Go)
 
-**Modes:** PTY (development) or TCP (fallback)
+**Port:** 9999 (TCP)
 
 Mock simulator for development and testing:
 
-- Creates virtual serial port via socat PTY
-- Full RS232 protocol implementation
+- Listens on TCP port 9999
+- Full RS232 protocol implementation (603-byte frames)
 - Configurable delays, error rates, decline rates
 - Responds to ECHO handshake for auto-detection
 
 **Key Features:**
-- `-mode pty` - Virtual serial port (recommended)
-- `-mode tcp` - TCP fallback (port 9999)
+- `-port 9999` - TCP port to listen on
 - `-delay 2000` - Processing delay in ms
 - `-decline-prob 0.1` - 10% decline rate
+- `-nak-prob 0.1` - 10% NAK rate
+- `-timeout-prob 0.1` - 10% timeout rate
 - `-verbose` - Detailed logging
 
 ---
@@ -338,7 +339,7 @@ ECPay-Server/
 │   ├── RS232.md                # ECPay RS232 protocol spec
 │   └── architecture.md         # This document
 │
-├── start.sh                    # Start all services (PTY mode)
+├── start.sh                    # Start all services
 └── stop.sh                     # Stop all services
 ```
 
