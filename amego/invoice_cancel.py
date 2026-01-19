@@ -15,23 +15,24 @@ APP_KEY = "sHeq7t8G1wiQvhAuIM27"
 INVOICE_TAX_ID = "12345678"  # 統編
 
 
-def cancel_invoice(invoice_number: str, cancel_reason: str = "訂單取消") -> Optional[Dict[str, Any]]:
+def cancel_invoice(invoice_number: str) -> Optional[Dict[str, Any]]:
     """
     Cancel an invoice using the Amego Invoice API.
 
     Args:
         invoice_number: The invoice number to cancel (e.g., "AB12345678")
-        cancel_reason: Reason for cancellation (default: "訂單取消")
 
     Returns:
         API response dict if successful, None otherwise.
     """
 
     # 1. Prepare Business Parameters
-    business_params = {
-        "InvoiceNumber": invoice_number,
-        "Reason": cancel_reason,
-    }
+    # API expects a list of objects, each with 'CancelInvoiceNumber'
+    business_params = [
+        {
+            "CancelInvoiceNumber": invoice_number
+        }
+    ]
 
     # 2. Serialize to JSON string
     # Using indent=0 to match reference implementation requirement
@@ -58,7 +59,6 @@ def cancel_invoice(invoice_number: str, cancel_reason: str = "訂單取消") -> 
 
     print(f"Sending request to: {API_URL}")
     print(f"Invoice Number: {invoice_number}")
-    print(f"Cancel Reason: {cancel_reason}")
 
     try:
         response = requests.post(
@@ -70,7 +70,8 @@ def cancel_invoice(invoice_number: str, cancel_reason: str = "訂單取消") -> 
         # Check API business code
         code = resp_json.get('code')
         if code == 0:
-            print(f"\n[SUCCESS] Invoice {invoice_number} cancelled successfully")
+            print(
+                f"\n[SUCCESS] Invoice {invoice_number} cancelled successfully")
             return resp_json
         else:
             print(f"\n[ERROR] API returned error code: {code}")
@@ -89,9 +90,7 @@ def cancel_invoice(invoice_number: str, cancel_reason: str = "訂單取消") -> 
 if __name__ == "__main__":
     # Example usage
     TEST_INVOICE_NUMBER = "AB12345678"
-    TEST_CANCEL_REASON = "測試作廢"
-
-    result = cancel_invoice(TEST_INVOICE_NUMBER, TEST_CANCEL_REASON)
+    result = cancel_invoice(TEST_INVOICE_NUMBER)
 
     if result:
         print(f"\nFull Response:")

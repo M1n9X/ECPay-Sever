@@ -48,7 +48,19 @@ function escapeStringPython(str: string): string {
 // '{\n"key": "value",\n"key2": 123\n}'
 // Note: newlines between entries, space after colon, no trailing comma
 // Also escapes non-ASCII characters to \uXXXX format
-function jsonDumpsPythonIndent0(obj: Record<string, any>): string {
+function jsonDumpsPythonIndent0(obj: any): string {
+  if (Array.isArray(obj)) {
+    const arrayItems = obj.map((item) => {
+      if (typeof item === "object" && item !== null) {
+        return jsonDumpsPythonIndent0(item);
+      }
+      return typeof item === "string"
+        ? `"${escapeStringPython(item)}"`
+        : String(item);
+    });
+    return "[\n" + arrayItems.join(",\n") + "\n]";
+  }
+
   const entries: string[] = [];
 
   for (const [key, value] of Object.entries(obj)) {
@@ -56,15 +68,6 @@ function jsonDumpsPythonIndent0(obj: Record<string, any>): string {
 
     if (typeof value === "string") {
       valueStr = `"${escapeStringPython(value)}"`;
-    } else if (Array.isArray(value)) {
-      // Handle arrays
-      const arrayItems = value.map((item) => {
-        if (typeof item === "object" && item !== null) {
-          return jsonDumpsPythonIndent0(item);
-        }
-        return typeof item === "string" ? `"${escapeStringPython(item)}"` : String(item);
-      });
-      valueStr = "[\n" + arrayItems.join(",\n") + "\n]";
     } else if (typeof value === "object" && value !== null) {
       valueStr = jsonDumpsPythonIndent0(value);
     } else {
@@ -78,15 +81,14 @@ function jsonDumpsPythonIndent0(obj: Record<string, any>): string {
 }
 
 // --- Main Function ---
-async function cancelInvoice(
-  invoiceNumber: string,
-  cancelReason: string = "訂單取消"
-): Promise<any> {
+async function cancelInvoice(invoiceNumber: string): Promise<any> {
   // Business Parameters
-  const businessParams = {
-    InvoiceNumber: invoiceNumber,
-    Reason: cancelReason,
-  };
+  // API expects an Array of objects with CancelInvoiceNumber
+  const businessParams = [
+    {
+      CancelInvoiceNumber: invoiceNumber,
+    },
+  ];
 
   // Convert to JSON matching Python's json.dumps(indent=0)
   const apiDataJson = jsonDumpsPythonIndent0(businessParams);
@@ -103,7 +105,6 @@ async function cancelInvoice(
   console.log("=".repeat(60));
   console.log(`\nAPI URL: ${API_URL}`);
   console.log(`Invoice Number: ${invoiceNumber}`);
-  console.log(`Cancel Reason: ${cancelReason}`);
   console.log(`Timestamp: ${currentTimestamp}`);
   console.log(`Signature: ${signature}`);
 
@@ -139,7 +140,9 @@ async function cancelInvoice(
     console.log(JSON.stringify(result, null, 2));
 
     if (result.code === 0) {
-      console.log(`\n✅ SUCCESS! Invoice ${invoiceNumber} cancelled successfully.`);
+      console.log(
+        `\n✅ SUCCESS! Invoice ${invoiceNumber} cancelled successfully.`,
+      );
     } else {
       console.log(`\n❌ ERROR: ${result.msg || "Unknown error"}`);
     }
@@ -154,9 +157,7 @@ async function cancelInvoice(
 // --- Run ---
 if (require.main === module) {
   const TEST_INVOICE_NUMBER = "AB12345678";
-  const TEST_CANCEL_REASON = "測試作廢";
-
-  cancelInvoice(TEST_INVOICE_NUMBER, TEST_CANCEL_REASON);
+  cancelInvoice(TEST_INVOICE_NUMBER);
 }
 
 export { jsonDumpsPythonIndent0, md5, cancelInvoice };

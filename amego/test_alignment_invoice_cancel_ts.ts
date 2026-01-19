@@ -14,7 +14,6 @@ const INVOICE_TAX_ID = "12345678";
 
 // --- Test Data ---
 const TEST_INVOICE_NUMBER = "AB12345678";
-const TEST_CANCEL_REASON = "測試作廢";
 
 const FIXED_TIMESTAMP = 1705420000;
 
@@ -47,7 +46,19 @@ function escapeStringPython(str: string): string {
 }
 
 // --- Utility: Match Python's json.dumps(indent=0) ---
-function jsonDumpsPythonIndent0(obj: Record<string, any>): string {
+function jsonDumpsPythonIndent0(obj: any): string {
+  if (Array.isArray(obj)) {
+    const arrayItems = obj.map((item) => {
+      if (typeof item === "object" && item !== null) {
+        return jsonDumpsPythonIndent0(item);
+      }
+      return typeof item === "string"
+        ? `"${escapeStringPython(item)}"`
+        : String(item);
+    });
+    return "[\n" + arrayItems.join(",\n") + "\n]";
+  }
+
   const entries: string[] = [];
 
   for (const [key, value] of Object.entries(obj)) {
@@ -55,15 +66,6 @@ function jsonDumpsPythonIndent0(obj: Record<string, any>): string {
 
     if (typeof value === "string") {
       valueStr = `"${escapeStringPython(value)}"`;
-    } else if (Array.isArray(value)) {
-      // Handle arrays
-      const arrayItems = value.map((item) => {
-        if (typeof item === "object" && item !== null) {
-          return jsonDumpsPythonIndent0(item);
-        }
-        return typeof item === "string" ? `"${escapeStringPython(item)}"` : String(item);
-      });
-      valueStr = "[\n" + arrayItems.join(",\n") + "\n]";
     } else if (typeof value === "object" && value !== null) {
       valueStr = jsonDumpsPythonIndent0(value);
     } else {
@@ -79,10 +81,11 @@ function jsonDumpsPythonIndent0(obj: Record<string, any>): string {
 // --- Main Test ---
 function runTest() {
   // 1. Business Parameters
-  const businessParams = {
-    InvoiceNumber: TEST_INVOICE_NUMBER,
-    Reason: TEST_CANCEL_REASON,
-  };
+  const businessParams = [
+    {
+      CancelInvoiceNumber: TEST_INVOICE_NUMBER,
+    },
+  ];
 
   // 2. JSON Serialization - Our Python-compatible version
   const apiDataJson = jsonDumpsPythonIndent0(businessParams);
@@ -95,12 +98,12 @@ function runTest() {
   console.log("=".repeat(60));
 
   console.log("\n--- 1. Business Parameters ---");
-  console.log(`InvoiceNumber: ${TEST_INVOICE_NUMBER}`);
-  console.log(`Reason: ${TEST_CANCEL_REASON}`);
+  console.log("\n--- 1. Business Parameters ---");
+  console.log(`CancelInvoiceNumber: ${TEST_INVOICE_NUMBER}`);
 
   console.log("\n--- 2. JSON Serialization ---");
   console.log(
-    "\n[A] jsonDumpsPythonIndent0() (should match Python's indent=0):"
+    "\n[A] jsonDumpsPythonIndent0() (should match Python's indent=0):",
   );
   console.log(JSON.stringify(apiDataJson)); // Use JSON.stringify to show escape chars
   console.log(`Length: ${apiDataJson.length}`);

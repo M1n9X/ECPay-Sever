@@ -13,7 +13,6 @@ INVOICE_TAX_ID = "12345678"
 
 # --- Test Data ---
 TEST_INVOICE_NUMBER = "AB12345678"
-TEST_CANCEL_REASON = "測試作廢"
 
 # Use a fixed timestamp for reproducible comparison
 FIXED_TIMESTAMP = 1705420000
@@ -23,10 +22,11 @@ def generate_test_values():
     """Generate all intermediate values for comparison."""
 
     # 1. Business Parameters
-    business_params = {
-        "InvoiceNumber": TEST_INVOICE_NUMBER,
-        "Reason": TEST_CANCEL_REASON,
-    }
+    business_params = [
+        {
+            "CancelInvoiceNumber": TEST_INVOICE_NUMBER
+        }
+    ]
 
     # 2. JSON Serialization with indent=0 (what invoice_cancel.py uses)
     api_data_json_indent0 = json.dumps(business_params, indent=0)
@@ -42,8 +42,7 @@ def generate_test_values():
     print("=" * 60)
 
     print("\n--- 1. Business Parameters ---")
-    print(f"InvoiceNumber: {TEST_INVOICE_NUMBER}")
-    print(f"Reason: {TEST_CANCEL_REASON}")
+    print(f"CancelInvoiceNumber: {TEST_INVOICE_NUMBER}")
 
     print("\n--- 2. JSON Serialization Variants ---")
     print(f"\n[A] json.dumps(indent=0) (what Python code uses):")
