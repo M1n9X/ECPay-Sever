@@ -1,8 +1,8 @@
 /**
- * TypeScript Alignment Test for reference.ts
- * Run with: npx tsx print/test_alignment_reference_ts.ts
+ * TypeScript Alignment Test for invoice_gen.ts
+ * Run with: npx tsx print/test_alignment_invoice_gen.ts
  *
- * This script outputs the same intermediate values as test_alignment_reference_py.py
+ * This script outputs the same intermediate values as test_alignment_invoice_gen.py
  * so you can compare them side-by-side.
  */
 

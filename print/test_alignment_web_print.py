@@ -7,7 +7,7 @@ This script outputs the intermediate values that TypeScript should match.
 import json
 import hashlib
 
-# --- Configuration (Must match print_tool.ts) ---
+# --- Configuration (Must match web_print_tool.ts) ---
 APP_KEY = "sHeq7t8G1wiQvhAuIM27"
 INVOICE_TAX_ID = "12345678"
 

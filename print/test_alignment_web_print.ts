@@ -1,8 +1,8 @@
 /**
  * TypeScript Alignment Test
- * Run with: npx tsx print/test_alignment_ts.ts
+ * Run with: npx tsx print/test_alignment_web_print.ts
  *
- * This script outputs the same intermediate values as test_alignment_py.py
+ * This script outputs the same intermediate values as test_alignment_web_print.py
  * so you can compare them side-by-side.
  */
 

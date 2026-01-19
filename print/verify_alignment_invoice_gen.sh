@@ -1,14 +1,14 @@
 #!/bin/bash
-# Verification script to compare Python and TypeScript alignment
+# Verification script to compare Python and TypeScript alignment for invoice_gen
 
 echo "=========================================="
-echo "ALIGNMENT VERIFICATION"
+echo "INVOICE_GEN ALIGNMENT VERIFICATION"
 echo "=========================================="
 echo ""
 
 # Run Python test and extract key values
 echo "Running Python test..."
-PY_OUTPUT=$(python3 print/test_alignment_reference_py.py 2>&1)
+PY_OUTPUT=$(python3 test_alignment_invoice_gen.py 2>&1)
 PY_LENGTH=$(echo "$PY_OUTPUT" | grep "JSON Length (indent=0):" | awk '{print $NF}')
 PY_SIG=$(echo "$PY_OUTPUT" | grep "MD5 Signature (indent=0):" | awk '{print $NF}')
 
@@ -19,7 +19,7 @@ echo ""
 
 # Run TypeScript test and extract key values
 echo "Running TypeScript test..."
-TS_OUTPUT=$(npx tsx print/test_alignment_reference_ts.ts 2>&1)
+TS_OUTPUT=$(npx tsx test_alignment_invoice_gen.ts 2>&1)
 TS_LENGTH=$(echo "$TS_OUTPUT" | grep "JSON Length:" | tail -1 | awk '{print $NF}')
 TS_SIG=$(echo "$TS_OUTPUT" | grep "MD5 Signature:" | head -1 | awk '{print $NF}')
 

@@ -1,11 +1,11 @@
 /**
- * TypeScript version of reference.py
+ * TypeScript version of invoice_gen.py
  * B2C Invoice Creation + Printing Example
  *
  * This script demonstrates creating and printing an invoice using the Amego Invoice API.
- * It matches the Python reference implementation exactly.
+ * It matches the Python invoice_gen implementation exactly.
  *
- * Run with: npx tsx print/reference.ts
+ * Run with: npx tsx print/invoice_gen.ts
  */
 
 import * as crypto from "crypto";
