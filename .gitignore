@@ -1,54 +1,73 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# ===================
+# Go
+# ===================
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-ecpay-server
-mock-pos/mock-pos
-
-# Test binary, built with `go test -c`
 *.test
-
-# Code coverage profiles and other test artifacts
 *.out
 coverage.*
 *.coverprofile
 profile.cov
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
 go.work
 go.work.sum
 
-# env file
+# Go binaries
+server/ecpay-server
+mock-pos/mock-pos
+
+# ===================
+# Node.js
+# ===================
+node_modules/
+dist/
+*.tsbuildinfo
+
+# ===================
+# Electron Build
+# ===================
+electron-app/release/
+electron-app/dist/
+electron-app/build/
+electron-app/resources/bin/*.exe
+electron-app/resources/bin/ecpay-server
+electron-app/resources/bin/log/
+
+# ===================
+# Logs
+# ===================
+logs/
+server/log/
+*.log
+*.pid
+
+# ===================
+# Environment
+# ===================
 .env
 .env.local
 .env.*.local
 
+# ===================
 # Editor/IDE
+# ===================
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# Logs
-logs/
-server/log/
-*.log
-*.pid
-
-# Node.js
-node_modules/
-dist/
-build/
-
+# ===================
 # OS
+# ===================
 .DS_Store
 Thumbs.db
+
+# ===================
+# Misc
+# ===================
+*.blockmap
+builder-debug.yml
+builder-effective-config.yaml

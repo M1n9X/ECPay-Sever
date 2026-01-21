@@ -17,7 +17,12 @@
     "dist": "npm run build && electron-builder",
     "build:go:win": "cd ../server && GOOS=windows GOARCH=amd64 go build -ldflags=\"-s -w\" -o ../electron-app/resources/bin/ecpay-server.exe .",
     "build:go:mac": "cd ../server && go build -ldflags=\"-s -w\" -o ../electron-app/resources/bin/ecpay-server .",
-    "build:go": "npm run build:go:mac"
+    "build:go": "npm run build:go:mac",
+    "build:win": "node scripts/build-windows.js",
+    "build:win:debug": "node scripts/build-windows.js --debug",
+    "build:win:arm64": "node scripts/build-windows.js --arm64",
+    "build:win:all": "node scripts/build-windows.js --all",
+    "build:win:clean": "node scripts/build-windows.js --clean"
   },
   "dependencies": {
     "clsx": "^2.1.0",
@@ -64,8 +69,15 @@
       "resources/bin/**"
     ],
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
