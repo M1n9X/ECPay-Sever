@@ -46,7 +46,11 @@ async function createWindow(): Promise<BrowserWindow> {
     // Development: load from Vite dev server
     logger.info('Loading from dev server', { url: config.devServer.url });
     await window.loadURL(config.devServer.url);
-    window.webContents.openDevTools();
+    
+    // Only open DevTools if explicitly requested via environment variable
+    if (process.env.OPEN_DEVTOOLS === 'true') {
+      window.webContents.openDevTools();
+    }
   } else {
     // Production: load from bundled files
     const indexPath = path.join(__dirname, '../renderer/index.html');

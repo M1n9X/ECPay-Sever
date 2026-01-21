@@ -12,6 +12,7 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
     "start": "electron .",
+    "start:debug": "OPEN_DEVTOOLS=true electron .",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "build:go:win": "cd ../server && GOOS=windows GOARCH=amd64 go build -ldflags=\"-s -w\" -o ../electron-app/resources/bin/ecpay-server.exe .",
