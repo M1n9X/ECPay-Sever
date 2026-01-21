@@ -4,17 +4,38 @@ A WebSocket-based gateway server that bridges web applications with ECPay POS te
 
 ## Architecture
 
+### Development Mode (Web)
+
 ```
 ┌─────────────┐    WebSocket    ┌─────────────┐    TCP/RS232    ┌─────────────┐
 │   Webapp    │ ◄───:5173───►   │   Server    │ ◄───:9999───►   │  Mock POS   │
 │  (React)    │                 │    (Go)     │                 │   (Go)      │
 └─────────────┘                 └─────────────┘                 └─────────────┘
-                                       │
-                                       ▼ (Production)
-                                ┌─────────────┐
-                                │  Real POS   │
-                                │ (RS232 EDC) │
-                                └─────────────┘
+```
+
+### Production Mode (Electron)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Electron Application                                │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Main Process                                                        │   │
+│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │   │
+│  │  │   Process    │    │   WebSocket  │    │     IPC      │          │   │
+│  │  │   Manager    │    │    Bridge    │    │   Handlers   │          │   │
+│  │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │   │
+│  │         │ spawn             │ ws                │ ipc              │   │
+│  │         ▼                   ▼                   ▼                  │   │
+│  │  ┌──────────────┐    ┌──────────────────────────────────┐         │   │
+│  │  │  Go Server   │◄──►│        Renderer (React UI)       │         │   │
+│  │  └──────┬───────┘    └──────────────────────────────────┘         │   │
+│  └─────────┼────────────────────────────────────────────────────────────┘   │
+│            │ RS232                                                           │
+│            ▼                                                                 │
+│     ┌─────────────┐                                                         │
+│     │  POS 终端   │                                                         │
+│     └─────────────┘                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Components
@@ -24,23 +45,37 @@ A WebSocket-based gateway server that bridges web applications with ECPay POS te
 | **Server** | `server/` | `:8989` | Go WebSocket server bridging webapp to POS |
 | **Mock POS** | `mock-pos/` | `:9999` | POS terminal simulator for development |
 | **Webapp** | `webapp/` | `:5173` | React TypeScript frontend for POS operations |
+| **Electron App** | `electron-app/` | - | Desktop application bundling Server + Webapp |
 
 ## Quick Start
 
-### Development (Mock Mode)
+### Option 1: Web Development (Mock Mode)
 
 ```bash
 # 1. Start Mock POS (in terminal 1)
 cd mock-pos && go run main.go
 
-# 2. Start Server in mock mode (in terminal 2)
-cd server && go run main.go -mock
+# 2. Start Server (in terminal 2)
+cd server && go run main.go
 
 # 3. Start Webapp (in terminal 3)
 cd webapp && npm install && npm run dev
 ```
 
 Open <http://localhost:5173> in your browser.
+
+### Option 2: Electron Application
+
+```bash
+# 1. Install dependencies
+cd electron-app && npm install
+
+# 2. Build Go Server
+npm run build:go:mac  # or build:go:win for Windows
+
+# 3. Start development mode
+npm run dev
+```
 
 ### Production (Real POS)
 
@@ -139,20 +174,34 @@ This project implements the [ECPay POS RS232 Protocol](docs/RS232.md).
 ```
 ECPay-Server/
 ├── docs/
-│   └── RS232.md          # Protocol specification
+│   ├── RS232.md              # Protocol specification
+│   ├── architecture.md       # System architecture
+│   ├── design.md             # Design decisions
+│   └── hybrid.md             # Hybrid architecture design
 ├── server/
-│   ├── main.go           # Entry point
-│   ├── api/              # WebSocket handlers
-│   ├── config/           # Configuration
-│   ├── driver/           # Port abstraction (Serial/TCP)
-│   └── protocol/         # ECPay packet building/parsing
+│   ├── main.go               # Entry point
+│   ├── api/                  # WebSocket handlers
+│   ├── config/               # Configuration
+│   ├── driver/               # Port abstraction (Serial/TCP)
+│   ├── logger/               # Logging
+│   └── protocol/             # ECPay packet building/parsing
 ├── mock-pos/
-│   └── main.go           # Mock POS simulator
+│   └── main.go               # Mock POS simulator
 ├── webapp/
 │   ├── src/
-│   │   ├── App.tsx       # Main application
-│   │   ├── components/   # UI components
-│   │   └── hooks/        # React hooks (usePOS, useOrders)
+│   │   ├── App.tsx           # Main application
+│   │   ├── components/       # UI components
+│   │   └── hooks/            # React hooks
+│   └── package.json
+├── electron-app/             # Electron desktop application
+│   ├── src/
+│   │   ├── main/             # Main process (Node.js)
+│   │   │   ├── index.ts      # Entry point
+│   │   │   ├── process-manager.ts
+│   │   │   ├── websocket-bridge.ts
+│   │   │   └── preload.ts
+│   │   └── renderer/         # Renderer process (React)
+│   ├── resources/bin/        # Go Server binary
 │   └── package.json
 └── README.md
 ```
