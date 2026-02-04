@@ -223,3 +223,11 @@ func BuildSaleRequest(amount int) []byte {
 3. **POS Ack Lose**: EDC 送出 Response 后 1s 未收到 ACK/NAK，或总时长超过 5s，EDC 视为 NAK 并可能重送 (PDF p.50)。
 4. **重试规则**: 仅在收到 NAK 时重送，重送次数为 3 次 (PDF p.48)。
 5. **交易超时**: POS Timeout > 60s，Auth Timeout = 60s (PDF p.49-50)。
+
+### 4. PDF Known Issues (原始 PDF 內部矛盾)
+
+以下為 PDF v3.6 內部不一致處，屬交易欄位與版型定義問題，與通訊 FSM 無直接衝突，但實作時需注意：
+
+- Section 4.7 分期退貨一段式流程標示 `Trans_Type ("02")`，但 Section 3.2 明確定義分期退貨為 `04`，且 Start Get PAN 亦標示分期退貨為 `04`。  
+- Section 4.16 金融卡退貨回傳欄位清單未包含 `Cancel Debt Number` 與 `Batch_Number`，但 Section 3.1.11 版型明確包含這些欄位。  
+- Section 4.17/4.18/4.19 交易回傳、列印明細、使用者登入回傳之欄位清單與 Section 3.1.12/3.1.13 的 600-byte 版型不一致；其中 4.18 未提供完整 600-byte 版型。  

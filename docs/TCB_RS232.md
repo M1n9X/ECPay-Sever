@@ -928,3 +928,11 @@ Notes:
 - Request LRC/Length error: EDC sends NAK (twice). POS retries request up to 3 times; then communication fails.
 - EDC Ack Lose: POS timeout (1s) waiting ACK/NAK after Request, assumes ACK and continues.
 - POS Ack Lose: If EDC does not receive ACK/NAK within 1s or total >5s after Response, EDC assumes NAK and may resend. POS must handle duplicates safely.
+
+## 10. PDF Known Issues (原始 PDF 內部矛盾)
+
+以下為 PDF v3.6 內部不一致處，已在本文件相應章節加註提醒，供實作時特別注意：
+
+- Section 4.7 分期退貨一段式流程標示 `Trans_Type ("02")`，但 Section 3.2 明確定義分期退貨為 `04`，且 Start Get PAN 亦標示分期退貨為 `04`。  
+- Section 4.16 金融卡退貨回傳欄位清單未包含 `Cancel Debt Number` 與 `Batch_Number`，但 Section 3.1.11 版型明確包含這些欄位。  
+- Section 4.17/4.18/4.19 交易回傳、列印明細、使用者登入回傳之欄位清單與 Section 3.1.12/3.1.13 的 600-byte 版型不一致；其中 4.18 未提供完整 600-byte 版型。  
