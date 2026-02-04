@@ -1,7 +1,7 @@
 # TCB (Taiwan Cooperative Bank) POS RS232 Specification (Master)
 
 > **Source**: 合作金庫 端末機與收銀機連線規格書
-> **Version**: 3.6 (2025-04-01)
+> **Version**: 3.7 (Master Polymorphic Map)
 > **Status**: **Master Copy (Full)**
 > **Last Updated**: 2026-02-04
 
@@ -15,11 +15,11 @@
 | **Stop Bits** | 1 | |
 | **Flow Control**| None | |
 
-### 1.1 Protocol Timing (v3.3+)
+### 1.1 Protocol Timing
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
-| **ACK Timeout** | **1 second** | Receiver must reply ACK/NAK within 1s (previously 2s) |
+| **ACK Timeout** | **1 second** | Receiver must reply ACK/NAK within 1s |
 | **ACK Retry Duration** | **5 seconds** | If no ACK after total 5s, assume failure |
 | **Inter-byte Delay** | **5ms** (Optional) | Default `N` = No delay. If enabled, 5ms per byte |
 
@@ -37,43 +37,42 @@
 ## 3. Transaction Types (TransType)
 
 Defined at **DATA Offset 0** (2 bytes).
-*Restored full list from PDF Page 27.*
 
-| Code | Type (EN) | Description (ZH) | Note |
+| Code | Type (EN) | Description (ZH) | Layout Mode |
 | :--- | :--- | :--- | :--- |
-| `01` | **SALE** | 一般交易 (購貨) | Standard Credit Card Sale |
-| `02` | **REFUND** | 退貨交易 | Credit Card Refund |
-| `03` | **INST_SALE** | 分期付款 | Installment Sale |
-| `04` | **INST_REFUND** | 分期退貨 | Installment Refund |
-| `05` | NATIONAL_PAY | 全國性繳費 | |
-| `06` | NORMAL_PAY | 一般繳費 | |
-| `07` | INQ_TIMEOUT | 逾時交易查詢 | |
-| `11` | BATCH_RETURN | 主機帳務回傳 | |
-| `20` | SELF_SALE | 無人自助交易純讀卡 | Kiosk Mode |
-| `21` | **NP_READ_CARD** | 無人全國性繳費 (純讀卡) | |
-| `22` | ALIPAY_SALE | 支付寶交易 | |
-| `23` | ALIPAY_VOID | 支付寶取消 | |
-| `24` | ALIPAY_REFUND | 支付寶退貨 | |
-| `25` | **SELF_SALE** | 無人自助交易 | Same layout as Type 01 |
-| `26` | **NP_SELF_SALE**| 無人全國性繳費 | Same layout as Type 05 |
-| `27` | FISC_REFUND | 金融卡退貨 | Smart Pay Refund |
-| `30` | VOID | 取消交易 | General Void |
-| `31` | CMAS_SALE | 悠遊卡購貨 | EasyCard Sale |
-| `32` | CMAS_REFUND | 悠遊卡退貨 | EasyCard Refund |
-| `36` | INTEL_OLPAY | 英特拉主掃 | Intella |
-| `37` | INTEL_MICROPAY| 英特拉被掃 | Intella |
-| `38` | **INTEL_REFUND**| 英特拉退款 | Wallet Refund |
-| `39` | **INTEL_INQ** | 英特拉查詢 | Wallet Inquiry |
-| `50` | **SETTLE** | 結帳交易 | Batch Settlement |
-| `51` | AUTO_SETTLE | 自動結帳 | **Special Layout** (See Note) |
-| `52` | **PRINT_STMT** | 列印帳務明細 | |
-| `60` | **GET_PAN** | 讀取卡號 | Read Card No (No Charge) |
-| `62` | SALE_2STAGE | 二段式交易 | Follows Type 60 |
-| `70` | **TERMINATE** | 終止交易 | Cancel after Type 60 |
-| `80` | REDEEM_SALE | 紅利交易 | Points Redemption Sale |
-| `81` | REDEEM_REF | 紅利退貨 | Points Redemption Refund |
-| `91` | **TRANS_RET** | 交易回傳 | Upload last transaction |
-| `92` | **USER_LOGON** | 使用者登入回傳| **Truncated Layout** (See 5.4) |
+| `01` | **SALE** | 一般交易 (購貨) | **Mode A** |
+| `02` | **REFUND** | 退貨交易 | **Mode A** |
+| `03` | **INST_SALE** | 分期付款 | **Mode B** |
+| `04` | **INST_REFUND** | 分期退貨 | **Mode B** |
+| `05` | NATIONAL_PAY | 全國性繳費 | **Mode C** |
+| `06` | NORMAL_PAY | 一般繳費 | **Mode C** |
+| `07` | INQ_TIMEOUT | 逾時交易查詢 | Standard |
+| `11` | BATCH_RETURN | 主機帳務回傳 | Standard |
+| `20` | SELF_SALE | 無人自助交易純讀卡 | **Mode A (Variant)** |
+| `21` | **NP_READ_CARD** | 無人全國性繳費 (純讀卡) | **Mode D** |
+| `22` | ALIPAY_SALE | 支付寶交易 | Standard |
+| `23` | ALIPAY_VOID | 支付寶取消 | Standard |
+| `24` | ALIPAY_REFUND | 支付寶退貨 | Standard |
+| `25` | **SELF_SALE** | 無人自助交易 | **Mode A** |
+| `26` | **NP_SELF_SALE**| 無人全國性繳費 | **Mode C** |
+| `27` | FISC_REFUND | 金融卡退貨 | **Mode G** |
+| `30` | VOID | 取消交易 | **Mode A** |
+| `31` | CMAS_SALE | 悠遊卡購貨 | **Mode E** |
+| `32` | CMAS_REFUND | 悠遊卡退貨 | **Mode E** |
+| `36` | INTEL_OLPAY | 英特拉主掃 | **Mode F** |
+| `37` | INTEL_MICROPAY| 英特拉被掃 | **Mode F** |
+| `38` | **INTEL_REFUND**| 英特拉退款 | **Mode F** |
+| `39` | **INTEL_INQ** | 英特拉查詢 | **Mode F** |
+| `50` | **SETTLE** | 結帳交易 | Standard |
+| `51` | AUTO_SETTLE | 自動結帳 | **Mode H** |
+| `52` | **PRINT_STMT** | 列印帳務明細 | Standard |
+| `60` | **GET_PAN** | 讀取卡號 | **Mode A** |
+| `62` | SALE_2STAGE | 二段式交易 | **Mode A** |
+| `70` | **TERMINATE** | 終止交易 | **Mode A** |
+| `80` | REDEEM_SALE | 紅利交易 | **Mode I (Redeem)** |
+| `81` | REDEEM_REF | 紅利退貨 | **Mode I (Redeem)** |
+| `91` | **TRANS_RET** | 交易回傳 | Standard |
+| `92` | **USER_LOGON** | 使用者登入回傳| **Special (Type 92)** |
 
 ## 4. Host ID (Bank Type)
 
@@ -92,230 +91,246 @@ Defined at **DATA Offset 2** (2 bytes).
 | `08` | National Pay | 全國性繳費 (VGHTPE Only) |
 | `99` | Other | 其他 |
 
-## 5. Application Payload Definition
+## 5. Application Payload Definition (Master Polymorphic Map)
 
 **Offset Rule**: All offsets are **0-based** (Start of DATA = 0).
-**Format**: Numeric (`N`) = Right-aligned 0-padded. String (`S`) = Left-aligned Space-padded.
 
-### 5.1 Common Header (Offsets 0-133)
+> [!IMPORTANT]
+> **Polymorphic Layouts**: TCB protocol uses `Trans_Type` (Offset 0-1) to switch between **8 distinct memory layouts**.
+> **Parser Logic**: Read `Trans_Type` first, then branch to the specific layout handler. Do **not** use a single struct.
 
-| Offset | Len | Field Name | Type | Req | Resp | Description |
-| :--- | :-- | :--- | :--- | :--- | :--- | :--- |
-| 0 | 2 | **Trans_Type** | N | M | M | Transaction Code |
-| 2 | 2 | **Host_ID** | N | O | M | Bank ID |
-| 4 | 6 | Invoice_No | S | O | M | Trace Number (調閱編號) |
-| 10 | 19 | Card_No | S | - | M | Card PAN |
-| 29 | 4 | Exp_Date | S | - | - | `MMYY` or Space |
-| 33 | 12 | **Trans_Amount** | N | M | M | Amount (No decimal) |
-| 45 | 6 | Trans_Date | N | - | M | `YYMMDD` |
-| 51 | 6 | Trans_Time | N | - | M | `HHmmss` |
-| 57 | 9 | Approval_No | S | - | M | Auth Code |
-| **66** | 12 | **(Union A)** | - | - | - | *See 5.2 (AuthAmt / DownPayment)* |
-| 78 | 4 | **Resp_Code** | S | - | M | `0000`=Success |
-| 82 | 8 | Terminal_ID | S | - | M | TID |
-| 90 | 12 | Reference_No | S | C | M | RRN. **Required for Refund**. |
-| **102**| 12 | **(Union B)** | - | - | - | *See 5.2 (ExpAmt / EachPayment)* |
-| 114 | 18 | Store_Id | S | O | O | Counter ID |
-| 132 | 2 | Start_Get_PAN | N | C | - | Types `01`/`02`/`60` (Subtype) |
+### 5.0 Layout Overview
 
-> **Note on National Pay (Types 05/06/26)**:
-> Offsets 57-78 are redefined:
->
-> * 57 (7): `Issuer_Seq_No`
-> * 64 (4): `Fee_Amt`
-> * 68 (6): `Process_Code`
-> * 74 (4): `Fisc_Code`
+| Mode | Trans_Type | Features |
+| :--- | :--- | :--- |
+| **A** | `01`, `02`, `25`, `30`, `60`, `62`, `70` | **Standard**. Card_No, Amounts, Terminal_ID. |
+| **B** | `03`, `04` | **Installment**. Overrides Middle (Amounts/Period). |
+| **C** | `05`, `06`, `26` | **National Pay**. Overrides Header (Fee/Seq) & Tail. |
+| **D** | `21` | **Kiosk Read**. Overrides Middle (TAC/IC_Memo). |
+| **E** | `31`, `32` | **EasyCard**. Overrides Header (Filler) & Tail (Balance). |
+| **F** | `36`, `37`, `38`, `39` | **Wallet**. **Destructive** override from Offset 57 (Order/ScanData). |
+| **G** | `27` | **FISC Refund**. Tweaks Middle (Batch_Number). |
+| **H** | `51` | **Auto Settle**. Completely different counter structure. |
+| **I** | `80`, `81` | **Redeem**. Standard Header + Tail Override (Points). |
 
-> **Note on EasyCard (Types 31/32)**:
-> `Reference_No` at Offset 90 is **14 bytes** (Standard is 12).
+---
 
-### 5.2 Polymorphic Fields (Offsets 66, 102, 134-143)
+### 5.1 Mode A: Standard Layout
 
-These fields change definition based on `Trans_Type`.
+**Applies to**: `01`, `02`, `25`, `30`, `60`, `62`, `70`
+*(and others not specified below)*
 
-#### Case A: Standard Sale / Refund (Types 01, 02)
+#### Header
 
 | Offset | Len | Field Name | Description |
 | :--- | :-- | :--- | :--- |
-| 66 | 12 | Auth_Amount | Pre-Auth Amount (Default 0/Space) |
-| 102 | 12 | Exp_Amount | Other Amount (Default 0/Space) |
+| 0 | 2 | **Trans_Type** | Transaction Code |
+| 2 | 2 | **Host_ID** | Bank ID |
+| 4 | 6 | Invoice_No | Trace Number |
+| 10 | 19 | Card_No | Card PAN |
+| 29 | 4 | Exp_Date | `MMYY` |
+| 33 | 12 | **Trans_Amount** | Amount |
+| 45 | 6 | Trans_Date | `YYMMDD` |
+| 51 | 6 | Trans_Time | `HHmmss` |
+| 57 | 9 | **Approval_No** | Auth Code |
+| 66 | 12 | **Auth_Amount** | Pre-Auth Amount |
+| 78 | 4 | Resp_Code | `0000`=Success |
+| 82 | 8 | **Terminal_ID** | TID |
+
+#### Middle
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 90 | 12 | **Reference_No** | RRN (Required for Refund) |
+| 102 | 12 | **Exp_Amount** | Other Amount |
+| 114 | 18 | Store_Id | Counter ID |
 | 134 | 3 | Issuer_ID | Card Issuer |
-| 137 | 1 | Card_Type | `1`:VISA `2`:MASTER `3`:JCB `4`:U_CARD `5`:DINERS `6`:AE `7`:SMART CARD `8`:CUP `9`:Other |
+| 137 | 1 | Card_Type | `1`=VISA, `2`=MC... |
 | 138 | 4 | Filler | Space |
-| 142 | 1 | Only_Credit | `1`:Force Credit, `2`:Force CUP |
-| 143 | 1 | *Filler* | Reserved (1-byte gap before Enc_Card_No) |
+| 142 | 1 | Only_Credit | `1`:Force Credit |
 
-> **Note on FISC Refund (Type 27)**:
->
-> * **Offset 138** is 1 Byte Filler.
-> * **Offset 139** is 6 Bytes **Batch_Number** (Original Transaction Batch).
-
-#### Case B: Installment (Types 03, 04)
+#### Tail
 
 | Offset | Len | Field Name | Description |
 | :--- | :-- | :--- | :--- |
-| 66 | 12 | **Down_Payment**| 首期金額 |
-| 102 | 12 | **Each_Payment**| 每期金額 |
-| 134 | 2 | **Period** | 期數 (e.g., `03`) |
-| 136 | 1 | Filler | Space |
-| 137 | 1 | Card_Type | Same as Case A |
-| 138 | 6 | **Interest_Amt**| 手續費 (Overlaps Filler/Only_Credit) |
-
-#### Case C: Redeem / Bonus Points (Types 80, 81)
-
-| Offset | Len | Field Name | Description |
-| :--- | :-- | :--- | :--- |
-| 66 | 6 | Act_Num | Activity Number |
-| 72 | 1 | Config | Redeem Config |
-| 73 | 2 | Resp | Redeem Response |
-| 75 | 1 | Sign | Balance Sign |
-| 76 | 2 | *Filler* | |
-| 102 | 12 | Amt_After_Cost| Amount after redemption |
-
-**Tail Layout Override for Redeem (Offset 194+):**
-
-> [!WARNING]
-> The Tail Section (Offsets 194+) is **redefined** for Redeem transactions. Standard fields `Cancel_Debt`, `STAN`, `Host_Resp_Code`, and `Merchant_ID` are **NOT AVAILABLE**.
-
-| Offset | Len | Field Name | Description |
-| :--- | :-- | :--- | :--- |
-| 194 | 10 | **Redeem_Rem** | Point Balance (Remaining) |
-| 204 | 10 | **Redeem_Cost**| Points Deduction |
-| 214 | 104 | *Filler* | Reserved |
+| 144 | 50 | Enc_Card_No | Encrypted PAN |
+| 194 | 16 | **Cancel_Debt** | 銷帳編號 |
+| 210 | 6 | **STAN** | Terminal Sequence |
+| 294 | 4 | **Host_Resp** | Bank Host Response |
+| 298 | 15 | **Merchant_ID** | Merchant ID |
 | 318 | 30 | Add_Info | Print Info |
 
+> **Note (Type 20 Kiosk)**: Middle is Standard, but Tail Offset 294 (`Host_Resp`) is replaced by 1-byte `Wave_Flag`.
+
 ---
 
-#### Case D: Wallet / Intella Transactions (Types 36, 37, 38, 39)
+### 5.2 Mode B: Installment
+
+**Applies to**: `03` (Sale), `04` (Refund)
+**Base**: Mode A
+**Overrides**: Middle Section only (Offsets 66 & 102-143)
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 66 | 12 | **Down_Payment**| 首期金額 (Replaces Auth_Amount) |
+| 102 | 12 | **Each_Payment**| 每期金額 (Replaces Exp_Amount) |
+| 134 | 2 | **Period** | 期數 (e.g. `03`) |
+| 136 | 1 | Filler | |
+| 137 | 1 | Card_Type | Same as Std |
+| 138 | 6 | **Interest_Amt**| 手續費 (Overlaps Filler/Only_Credit) |
+
+---
+
+### 5.3 Mode C: National Pay
+
+**Applies to**: `05`, `06`, `26`
+**Base**: Mode A
+**Overrides**: Header (57-81) & Tail (210+)
+
+#### Header Override
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 57 | 7 | **Issuer_Seq_No** | 發卡方序號 |
+| 64 | 4 | **Fee_Amt** | 手續費 |
+| 68 | 6 | **Process_Code** | 處理碼 |
+| 74 | 4 | **Fisc_Code** | 繳費類別碼 |
+| 78 | 4 | Resp_Code | Same as Std |
+
+#### Tail Override
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 210 | 4 | **Host_Resp_Code** | **Moved Here** (Std is at 294) |
+| 214 | 4 | **NP_Resp_Err** | 全国缴费错误码 |
+| 218 | 15 | **Merchant_ID** | Merchant ID |
+| 233 | 16 | **NP_Order_No** | 全繳訂單號 |
+
+---
+
+### 5.4 Mode D: Kiosk Read Card
+
+**Applies to**: `21`
+**Base**: Mode A
+**Overrides**: Middle (90-137)
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 90 | 30 | **IC_Memo** | 晶片卡備註 |
+| 120 | 8 | **TAC** | 驗證碼 |
+| 128 | 8 | **TCC_Code** | Terminal Check Code |
+| 136 | 1 | **Wave_Flag** | `1`=Contactless, `0`=Contact |
+
+---
+
+### 5.5 Mode E: EasyCard
+
+**Applies to**: `31`, `32`
+**Base**: Mode A
+**Overrides**: Middle (Filler) & Tail (336+)
+
+#### Middle Override
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 102 | 234 | **Filler** | **Huge Filler** (Until Offset 335) |
+
+#### Tail Override (Offset 336+)
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 336 | 1 | **Ticket_Type** | `1`:TCB `2`:iCash `3`:iPASS |
+| 337 | 19 | **Card_ID** | Ticket Card ID |
+| 356 | 10 | Ticket_Ref_No | Reference |
+| 366 | 10 | Ticket_Batch | Batch |
+| 396 | 10 | **Balance** | Current Balance |
+
+---
+
+### 5.6 Mode F: Wallet / QR Scan
+
+**Applies to**: `36`, `37`, `38`, `39`
+**Type**: **Destructive Override** starting at Offset 57.
 
 > [!CAUTION]
-> These transaction types **DO NOT** follow the standard layout after Offset 57. The `Scan_Data` field (for QR codes) **obliterates** standard fields like `Terminal_ID`, `Reference_No`, etc.
->
-> When `Trans_Type` is `36/37/38/39`, **DO NOT** try to parse `Card_No` at Offset 10 or `Reference_No` at Offset 90. They do not exist.
->
-> **Note**: Implementation should strictly use Types **36-39** as defined in the Code table (PDF Page 27). Type 14 appears in older/internal contexts but is not recommended.
+> Do NOT look for `Terminal_ID` or `Reference_No` in standard locations.
 
-**Layout for Intella/Wallet (Offsets 0-600):**
-
-| Offset | Len | Field Name | Description | Note |
-| :--- | :-- | :--- | :--- | :--- |
-| 0 | 2 | Trans_Type | Transaction Code | Same as Std |
-| 2 | 31 | *Filler* | **Reserved** | **Differs from Std** (Std uses HostID/Invoice/CardNo here) |
-| 33 | 12 | Trans_Amount | Amount | Same as Std |
-| 45 | 6 | Trans_Date | Date | Same as Std |
-| 51 | 6 | Trans_Time | Time | Same as Std |
-| 57 | 20 | Order_Num | **Order Number** | **Overwrites** Approval_No(9) + Auth_Amt(12) |
-| 77 | 1 | Order_Status | Status | See table below |
-| 78 | 4 | Resp_Code | ECR Response | Same as Std |
-| 82 | 4 | **Intella_Resp**| Intella Response | **Overwrites** start of Terminal_ID |
-| 86 | 512 | **Scan_Data** | **QR/Scan Payload** | **Huge Field**. Overwrites Offsets 86-597. |
-| 598 | 2 | *Filler* | | |
-
-**Order_Status Values (Offset 77):**
-
-| Value | Status | Description |
-| :--- | :--- | :--- |
-| `0` | Processing | 處理中 |
-| `1` | Transaction Success | 交易成功 |
-| `2` | Transaction Fail | 交易失敗 |
-| `3` | Refund Success | 退款成功 |
-| `4` | Refund Fail | 退款失敗 |
-| `5` | Order Not Found | 訂單資料不存在 |
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 0 | 2 | Trans_Type | |
+| 2 | 2 | Host_ID | |
+| 4 | ... | ... | (Std Date/Time/Amount at 33-56) |
+| 57 | 20 | **Order_Num** | 訂單號 (Overwrites Approval_No) |
+| 77 | 1 | **Order_Status**| `0`:Processing, `1`:Success, `2`:Fail |
+| 78 | 4 | ECR_Resp | |
+| 82 | 4 | Intella_Resp | |
+| 86 | 512 | **Scan_Data** | **QR Payload** (Overwrites Everything) |
 
 ---
 
-#### Case E: National Pay Read-Card (Type 21)
+### 5.7 Mode G: FISC Refund
 
-> [!NOTE]
-> Type 21 overwrites standard Offsets 90-137.
-
-| Offset | Len | Field Name | Description |
-| :--- | :-- | :--- | :--- |
-| 90 | 30 | **IC_Memo** | `IcCardCommet` (晶片卡備註) |
-| 120 | 8 | **TAC** | Chip Transaction Authentication Code |
-| 128 | 8 | **TCC_Code** | Terminal Check Code |
-| 136 | 1 | **Wave_Flag** | `1`: Contactless, `0`: Contact |
-
-### 5.3 Tail Section (Offsets 144-600)
-
-| Offset | Len | Field Name | Req | Resp | Description |
-| :--- | :-- | :--- | :--- | :--- | :--- |
-| 144 | 50 | **Enc_Card_No**| C | C | Base64 Encrypted Card (E-Invoice) |
-| 194 | 16 | Cancel_Debt | C | C | 銷帳編號 |
-| 210 | 6 | STAN | - | C | Terminal Sequence No |
-| 216 | 16 | Order_Num | C | C | Mobile Pay Order No |
-| 232 | 16 | **Old_Order_No**| C | C | Original Order No (for Refund) |
-| 248 | 14 | Old_Trans_Time| - | C | Orig. Time `YYYYMMDDHHmmss` |
-| 262 | 32 | Alipay_ID | - | C | Alipay Trans ID |
-| 294 | 4 | **Host_Resp** | - | M | Bank Host Response Code |
-| 298 | 15 | Merchant_ID | - | M | Merchant ID |
-| 313 | 5 | Filler | - | - | |
-| 318 | 30 | Add_Info | O | O | Print Line / Info |
-| 348 | 1 | **ESC_Status** | - | C | E-Sig: `0` None, `1` Upload, `2` Print |
-| 349 | 4 | ESC_Resp | - | C | E-Sig Response |
-| 353 | 247 | Filler | - | - | Space Padding |
-
-> **Note on Redeem (Type 80/81)**:
-> For Redeem transactions, offsets **194-318** have specific point definitions. See **Case C Tail Layout Override** in Section 5.2 for complete field definitions.
-
-> **Note on Kiosk Read-Card (Type 20)**:
-> For Type 20, Offset 294 is **1 byte** `Wave_Flag` (`1`:Contactless, `0`:Contact). Standard `Host_Resp` (4 bytes) is **NOT** present.
-
-#### Case F: EasyCard Tail Override (Types 31, 32)
-
-> **Offsets 102 to 335**: Empty/Filler (234 bytes).
-> **Offsets 336+**: Redefined as follows (Overwrites Add_Info/ESC).
+**Applies to**: `27`
+**Base**: Mode A
+**Overrides**: Middle (138+)
 
 | Offset | Len | Field Name | Description |
 | :--- | :-- | :--- | :--- |
-| 336 | 1 | **Ticket_Type** | `1`:EasyCard `2`:iCash `3`:iPASS `4`:HappyCash |
-| 337 | 19 | **Ticket_Card_No**| Card ID |
-| 356 | 10 | Ticket_Ref_No | Reference Number |
-| 366 | 10 | Ticket_Batch | Batch Number |
-| 376 | 10 | Pre_Balance | Balance Before Tx |
-| 386 | 10 | Auto_Load_Amt | Auto-Load Amount |
-| 396 | 10 | **Balance** | Current Balance |
-| 406 | 194 | *Filler* | |
-
-### 5.4 Special Layouts
-
-#### Type 51 (AUTO_SETTLE) Response Layout
-
-> [!IMPORTANT]
-> Type 51 returns a massive block of concatenated counters. **DO NOT** parse using Standard Header offsets after Offset 4.
-
-**Payload Structure:**
-
-* **Payload Start Offset:** **4** (0-1 `Trans_Type`, 2-3 `Host_ID`).
-* Contains concatenated `Response_Code` (4 bytes) and `Status` (1 byte) for **all** host types.
-* Followed by `SaleAmount`, `RefundAmount`, `SaleCount`, `RefundCount` for every host sequentially.
-
-**Fixed Host Order in Response:**
-
-1. **TCB** (General)
-2. **FISC** (SmartPay)
-3. **NP** (National Pay)
-4. **AE** (Amex)
-5. **INST** (Installment)
-6. **CMAS** (EasyCard)
+| 138 | 1 | Card_Type | (Reserved/Filler) |
+| 139 | 6 | **Batch_Number** | 原交易批次號 (Fills to 144) |
 
 ---
 
-#### Type 92 (USER_LOGON) Truncated Layout
+### 5.8 Mode H: Auto Settle
 
-> [!IMPORTANT]
-> Type 92 uses a **truncated layout**. It does NOT contain Amounts, Card Numbers, or Invoice Numbers.
+**Applies to**: `51`
+**Type**: **Complete Rewrite**
+
+> **Do not use Standard Header**.
 
 | Offset | Len | Field Name | Description |
 | :--- | :-- | :--- | :--- |
-| 0 | 2 | Trans_Type | `92` |
-| 2 | 6 | Trans_Date | `YYMMDD` |
-| 8 | 6 | Trans_Time | `HHmmss` |
-| 14 | 4 | ECR_Resp | ECR Response Code |
-| 18 | 8 | EDC_Terminal | Terminal ID |
-| 26 | 15 | EDC_Merchant | Merchant ID |
+| 0 | 2 | Trans_Type | `51` |
+| 2 | 2 | Host_ID | |
+| 4 | N*Len | **Counters** | Concatenated Counters for 6 Hosts |
 
-> Parsers should handle this reduced header length to avoid reading garbage data.
+**Counter Block Structure** (Repeated for TCB, FISC, NP, AE, INST, CMAS):
+
+* `Resp_Code` (4) + `Status` (1)
+* `SaleAmt` (12) + `RefAmt` (12)
+* `SaleCnt` (3) + `RefCnt` (3)
+
+---
+
+### 5.9 Mode I: Redeem (Preserved)
+
+**Applies to**: `80`, `81`
+**Base**: Mode A
+**Overrides**: Tail (194+)
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 194 | 10 | **Redeem_Rem** | Remaining Points |
+| 204 | 10 | **Redeem_Cost**| Points Deducted |
+| 318 | 30 | Add_Info | Print Info |
+| *Note* | | | No `Cancel_Debt`, `STAN`, `Host_Resp` |
+
+---
+
+### 5.10 Special: User Logon (Type 92)
+
+**Truncated Layout** (Ends at Offset 41).
+
+| Offset | Len | Field Name |
+| :--- | :-- | :--- |
+| 0 | 2 | Trans_Type (`92`) |
+| 2 | 6 | Date |
+| 8 | 6 | Time |
+| 14 | 4 | ECR_Resp |
+| 18 | 8 | TID |
+| 26 | 15 | MID |
+
+---
 
 ## 6. Response Code Reference (Offset 78)
 
@@ -323,34 +338,14 @@ These fields change definition based on `Trans_Type`.
 | :--- | :--- | :--- |
 | `0000` | 授權 / 成功 | Approve |
 | `0001` | 拒絕 | Decline |
-| `0002` | 請聯絡銀行 | Refer to Issuer |
-| `0003` | 操作逾時 | Retry |
 | `0004` | 操作錯誤 | Fix Logic |
-| `0005` | 通訊失敗 | Comm Error |
-| `0011` | 連線逾時 | Timeout |
 | `0012` | **請先結帳** | **Must Execute Settle (50)** |
-| `0013` | 繳費逾時 | Query status at counter |
-| `0014` | 查無交易 | Check RRN / Date |
 
 ## 7. Implementation Notes
 
-1. **Padding**:
-    * Amounts: Right-aligned, pad with `'0'`. (e.g., `000000001200`)
-    * Strings: Left-aligned, pad with Space `0x20`.
-2. **Date/Time**: TCB uses separated `YYMMDD` (6 bytes) and `HHmmss` (6 bytes), unlike ECPay's 14-byte format.
-3. **LRC Logic**: `LRC = XOR(Data[0]...Data[599]) XOR ETX(0x03)`.
-4. **Installment Conflict**: When parsing `TransType=03`, do NOT read `Only_Credit` at Offset 142. It is dirty memory because `Interest_Amt` occupies Offset 138-144 (6 bytes).
-5. **Wallet/Intella Conflict**: When parsing `TransType=36/37/38/39`, the entire layout after Offset 2 is different. `Scan_Data` (512 bytes at Offset 86) overwrites most standard fields. See **Case D** in Section 5.2.
-6. **Redeem Conflict**: When parsing `TransType=80/81`, Tail Section fields (Offset 194+) are redefined. `Cancel_Debt`, `STAN`, `Host_Resp_Code`, and `Merchant_ID` do not exist. See **Case C Tail Layout Override** in Section 5.2.
-7. **FISC Refund Rules (Type 27)**:
-    * Refund Amount must be **<=** Original Transaction Amount.
-    * A single original transaction (`STAN` / `Old_Order_No`) can only be refunded **once**. Subsequent attempts will be rejected by the FISC host.
-8. **AUTO_SETTLE (Type 51)**: Do not parse using Standard Header. See Section 5.4.
-9. **USER_LOGON (Type 92)**: Uses truncated layout without Amount/CardNo/Invoice fields. See Section 5.4.
-10. **Sale 2 Stage (Type 62)**: The `Trans_Amount` in the confirmation stage (Type 62) **cannot be greater** than the amount authorized in the initial Read Card stage (Type 60).
-11. **Config.dat Settings**:
-    * **Timeout Setup**: Configurable (Default 60s/70s).
-    * **Error Retry**: Default 3 times.
-12. **Type 21 vs 26**:
-    * **Type 21 (NP_READ_CARD)**: Read card data only. Returns TAC/TCC.
-    * **Type 26 (NP_SELF_SALE)**: Full transaction execution. Follows Type 05 layout.
+1. **Switch-Case First**: Always switch on `Trans_Type` (Offset 0-1) before parsing deeper fields.
+2. **Padding**: Numeric=Right-0-Pad, String=Left-Space-Pad.
+3. **LRC**: `XOR(Data[0]...Data[599]) XOR ETX`.
+4. **Dates**: TCB uses `YYMMDD` + `HHmmss` (Separated).
+5. **Mode F**: Wallet transactions (`36-39`) destroy almost all standard fields.
+6. **Mode H**: Auto Settle (`51`) describes machine state, not a transaction.
