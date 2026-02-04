@@ -88,58 +88,68 @@ func (link *TcbLink) calculateLRC(payload []byte) byte {
  return lrc
 }
 
-// SendPacket implements the reliable send flow with Retries
+// SendPacket implements the reliable send flow with PDF Page 49 "Assume ACK" logic
 func (link *TcbLink) SendPacket(payload []byte) error {
  if len(payload) != PayloadLen {
   return fmt.Errorf("invalid payload length: %d, expected %d", len(payload), PayloadLen)
  }
 
- // 1. Construct Frame: STX + Payload + ETX + LRC
  frame := make([]byte, 0, PacketLen)
  frame = append(frame, STX)
  frame = append(frame, payload...)
  frame = append(frame, ETX)
  frame = append(frame, link.calculateLRC(payload))
 
- // 2. Retry Loop
- for i := 0; i < MaxRetries; i++ {
-  // Flush input buffer (optional, depends on driver)
-  // link.port.Flush() 
+ // [CRITICAL FIX 1] Flush buffer to remove stale retransmissions from previous trans (PDF P50)
+ if flusher, ok := link.port.(interface{ Flush() error }); ok {
+  flusher.Flush() 
+ } else {
+  // Fallback: Read until empty if Flush not supported
+  tmp := make([]byte, 1024)
+  for {
+   // imply non-blocking read or very short timeout here
+   n, _ := link.port.Read(tmp)
+   if n == 0 { break }
+  }
+ }
 
-  // Write
+ for i := 0; i < MaxRetries; i++ {
   if _, err := link.port.Write(frame); err != nil {
    return err
   }
 
-  // Wait for ACK/NAK
   resp := make([]byte, 1)
   
-  // Note: In real serial impl, use SetReadDeadline(AckTimeout)
-  // Here we assume read blocks or returns error on timeout
-  n, err := link.port.Read(resp)
+  // Simulate Read with Timeout (1s)
+  // type SetReadDeadline interface { SetReadDeadline(t time.Time) error }
+  // if r, ok := link.port.(SetReadDeadline); ok { r.SetReadDeadline(time.Now().Add(AckTimeout)) }
   
+  n, err := link.port.Read(resp)
+
+  // [CRITICAL FIX 2] PDF Page 49: POS Ack Lose
+  // If Timeout (err != nil or n==0), Assume ACK and Success.
   if err != nil || n == 0 {
-   // Timeout or Read Error -> Retry
-   continue
+   // Log warning: "ACK timeout, assuming success per PDF p.49"
+   return nil 
   }
 
   if resp[0] == ACK {
-   return nil // Success
+   return nil
   } else if resp[0] == NAK {
-   continue // EDC rejected checksum -> Retry
+   // PDF Page 48: Only retry on NAK
+   time.Sleep(100 * time.Millisecond) // Optional short delay
+   continue
   }
-  // Received garbage -> Retry
+  // Garbage received? Treat as NAK or Ignore? PDF implies Retry on NAK.
  }
 
- return errors.New("send packet failed: max retries exceeded or NAK received")
+ return errors.New("send packet failed: max retries exceeded on NAK")
 }
 
-// ReadPacket implements receiving with LRC verification and auto-ACK
 func (link *TcbLink) ReadPacket() ([]byte, error) {
  buffer := make([]byte, 1)
  
  // 1. Wait for STX
- // Note: Application layer usually sets a long ReadDeadline (60s) before calling this
  for {
   if _, err := link.port.Read(buffer); err != nil {
    return nil, err
@@ -147,7 +157,7 @@ func (link *TcbLink) ReadPacket() ([]byte, error) {
   if buffer[0] == STX {
    break
   }
-  // Ignore garbage bytes before STX
+  // Ignore garbage/noise bytes
  }
 
  // 2. Read remaining 602 bytes (Data + ETX + LRC)
@@ -178,6 +188,9 @@ func (link *TcbLink) ReadPacket() ([]byte, error) {
  }
 
  // 4. Send ACK
+ // [Optimization] After sending ACK, we are technically done.
+ // However, if we send ACK and it's lost, EDC sends data again (PDF P50).
+ // The "Flush" in the NEXT SendPacket handles that residue.
  link.port.Write([]byte{ACK})
  return payload, nil
 }

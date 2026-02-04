@@ -20,7 +20,7 @@
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
 | **ACK Timeout** | **1 second** | Receiver must reply ACK/NAK within 1s |
-| **ACK Retry Duration** | **5 seconds** | If no ACK after total 5s, assume failure |
+| **Retry Limit** | **3 times** | (PDF p.7) Max retransmissions on NAK/Timeout |
 | **Inter-byte Delay** | **5ms** (Optional) | Default `N` = No delay. If enabled, 5ms per byte |
 
 ## 2. Packet Structure (Link Layer)
