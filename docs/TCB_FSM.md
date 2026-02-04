@@ -13,6 +13,7 @@
 | **WAIT_ACK** | 收到 `ACK` | (无) | **IDLE** | 发送成功 |
 | | 收到 `NAK` | 重发次数 < 3 ? 重发 : 报错 | **WAIT_ACK** / **IDLE** | 仅在 NAK 时重发 |
 | | 超时 1s | 视为 `ACK` | **IDLE** | **EDC Ack Lose** (PDF p.49) |
+| | 收到 `STX` | 重置接收Buffer | **READING** | EDC Ack Lose 后可能直接送 Response |
 | **READING** | 收到数据字节 | 存入 Buffer | **READING** | 固定长度 600+ETX+LRC |
 | | 收满 600+ETX+LRC | 计算 LRC | **VERIFY** | 收到完整包 |
 | | 接收长度不足/断流 | 发送 `NAK`x2 | **IDLE** | 视为长度错误 |
@@ -21,6 +22,14 @@
 
 **重复 Response 处理**: 若 POS 未在 1s 内回 ACK/NAK，EDC 可能重送 Response，最久 5s (PDF p.50)。POS 必须容忍重复 Response 并再次回 ACKx2，应用层需做幂等处理。
 
+**重试与延迟规则**:
+- Request 端：收到 NAK 后**延迟 1 秒**再重送；最多重送 3 次（共 4 次发送）后判定通信失败。  
+- Response 端：若收到 LRC/长度错误，POS 回 NAKx2，EDC 会重送；建议同样以 **3 次** 为上限，超过则报错并回到 IDLE。
+
+**噪声与残留字节处理**:
+- 在 IDLE / WAIT_ACK / READING 时收到非 STX 且非 ACK/NAK 的噪声字节应直接丢弃，不进入状态迁移。
+- ACK/NAK 为双发，应用应容忍重复 ACK/NAK，不影响状态机稳定性。
+
 #### 1.2 应用层状态机 (App Layer FSM)
 
 | 状态 | 事件 | 动作 | 下一状态 | 说明 |
@@ -28,6 +37,49 @@
 | **APP_IDLE** | 用户发起交易 | 构造 Request -> Link.Send | **APP_WAIT_RESP** | |
 | **APP_WAIT_RESP** | Link 收到 Response | 解析 -> 返回结果 | **APP_IDLE** | 正常流程 |
 | | 总超时 60s | 交易逾时错误 | **APP_IDLE** | PDF: POS Timeout > 60s |
+
+**应用层建议实现（上位机行为）**:
+- **去重键**: 建议使用 `Trans_Type + Invoice_No + Reference_No + STAN + Trans_Amount + Trans_Date + Trans_Time` 作为幂等键；若字段缺失，则降级组合可用字段（例如仅使用 `Invoice_No + Trans_Amount + Trans_Time`）。  
+- **结果判定**: 以 `ECR_Response_Code` 为主，若为 0000 视为成功；若为 0011/0013 等需提示用户“逾时查询/请至柜台”。  
+- **展示信息**: 将 `ECR_Response_Code` 映射为人可读错误提示；成功时可展示 `Approval_No`、`Reference_No`、`Terminal_ID`。  
+- **重复 Response**: 若去重键已处理过，仍需回 ACKx2，但不得重复入账或重复打印。
+
+#### 1.3 上位机实现指引（可直接落地）
+
+**推荐交易流程（同步式）**:
+1. 校验输入参数（交易别、金额、必要字段）。
+2. 构造 600-byte DATA，填充必填字段与空白。
+3. 调用 Link.Send（发送 Request）。
+4. 进入 `APP_WAIT_RESP`，等待 Link.Read 收到 Response。
+5. 解析 Response -> 判定成功/失败 -> 显示结果。
+6. 记录幂等键与结果，避免重复入账。
+
+**推荐交易流程（异步式）**:
+1. UI 发起交易，进入 `PENDING` 状态并显示“处理中”。
+2. 发送 Request 后进入等待。
+3. 若收到 Response，转 `SUCCESS` 或 `FAILED`，更新 UI。
+4. 若超过 60s 未收到，转 `TIMEOUT`，提示“交易逾时，请查询结果”。
+
+**错误提示映射（示例）**:
+1. `0000` -> 交易成功
+2. `0001` -> 交易失败（拒绝）
+3. `0003` -> 操作逾时
+4. `0005` -> 通讯失败
+5. `0011` -> 連線逾時，请确认网络或改为查询
+6. `0013` -> 全國性繳費交易逾時，请进行逾时交易查询
+
+**业务关键字段建议**:
+1. 成功交易展示：`Approval_No`、`Reference_No`、`EDC_Terminal_ID`、`Trans_Amount`、`Trans_Date`、`Trans_Time`。
+2. 失败交易展示：`ECR_Response_Code` 与人可读说明。
+3. 查询/补救交易：保留 `Invoice_No`、`Reference_No` 作为后续查询依据。
+
+**幂等与重复包处理**:
+1. 若收到重复 Response（去重键已存在），只回 ACKx2，不重复入账。
+2. 若在 `APP_WAIT_RESP` 中先收到 ACK/NAK 噪声，忽略并继续等待 Response。
+
+**超时处理建议**:
+1. 交易 60s 超时后显示“交易逾时”，并提供“查询结果”入口。
+2. 若收到 `0011` 或 `0013`，提示用户保留交易凭证并进行查询。
 
 ---
 
@@ -117,7 +169,8 @@ func (link *TcbLink) SendPacket(payload []byte) error {
    // ACK received or timeout => assume ACK (EDC Ack Lose, PDF p.49)
    return nil
   }
-  // err means NAK received -> retry
+  // err means NAK received -> retry after 1s (PDF p.48)
+  time.Sleep(1 * time.Second)
  }
 
  return errors.New("send packet failed: max retries exceeded on NAK")
