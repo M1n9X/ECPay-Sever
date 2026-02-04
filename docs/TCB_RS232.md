@@ -50,6 +50,7 @@ Defined at **DATA Offset 0** (2 bytes).
 | `07` | INQ_TIMEOUT | 逾時交易查詢 | |
 | `11` | BATCH_RETURN | 主機帳務回傳 | |
 | `20` | SELF_SALE | 無人自助交易純讀卡 | Kiosk Mode |
+| `21` | **NP_READ_CARD** | 無人全國性繳費 (純讀卡) | |
 | `22` | ALIPAY_SALE | 支付寶交易 | |
 | `23` | ALIPAY_VOID | 支付寶取消 | |
 | `24` | ALIPAY_REFUND | 支付寶退貨 | |
@@ -68,6 +69,7 @@ Defined at **DATA Offset 0** (2 bytes).
 | `52` | **PRINT_STMT** | 列印帳務明細 | |
 | `60` | **GET_PAN** | 讀取卡號 | Read Card No (No Charge) |
 | `62` | SALE_2STAGE | 二段式交易 | Follows Type 60 |
+| `70` | **TERMINATE** | 終止交易 | Cancel after Type 60 |
 | `80` | REDEEM_SALE | 紅利交易 | Points Redemption Sale |
 | `81` | REDEEM_REF | 紅利退貨 | Points Redemption Refund |
 | `91` | **TRANS_RET** | 交易回傳 | Upload last transaction |
@@ -86,6 +88,7 @@ Defined at **DATA Offset 2** (2 bytes).
 | `04` | TCB Inst | 合庫 (Installment) |
 | `05` | EasyCard | 悠遊卡 |
 | `06` | iPASS | 一卡通 |
+| `07` | DCC | Dynamic Currency Conversion |
 | `08` | National Pay | 全國性繳費 (VGHTPE Only) |
 | `99` | Other | 其他 |
 
@@ -113,7 +116,18 @@ Defined at **DATA Offset 2** (2 bytes).
 | 90 | 12 | Reference_No | S | C | M | RRN. **Required for Refund**. |
 | **102**| 12 | **(Union B)** | - | - | - | *See 5.2 (ExpAmt / EachPayment)* |
 | 114 | 18 | Store_Id | S | O | O | Counter ID |
-| 132 | 2 | Start_Get_PAN | N | C | - | Only for Type `60` |
+| 132 | 2 | Start_Get_PAN | N | C | - | Types `01`/`02`/`60` (Subtype) |
+
+> **Note on National Pay (Types 05/06/26)**:
+> Offsets 57-78 are redefined:
+>
+> * 57 (7): `Issuer_Seq_No`
+> * 64 (4): `Fee_Amt`
+> * 68 (6): `Process_Code`
+> * 74 (4): `Fisc_Code`
+
+> **Note on EasyCard (Types 31/32)**:
+> `Reference_No` at Offset 90 is **14 bytes** (Standard is 12).
 
 ### 5.2 Polymorphic Fields (Offsets 66, 102, 134-143)
 
@@ -126,10 +140,15 @@ These fields change definition based on `Trans_Type`.
 | 66 | 12 | Auth_Amount | Pre-Auth Amount (Default 0/Space) |
 | 102 | 12 | Exp_Amount | Other Amount (Default 0/Space) |
 | 134 | 3 | Issuer_ID | Card Issuer |
-| 137 | 1 | Card_Type | `1`:Visa `2`:Master `3`:JCB `6`:AE `8`:CUP `9`:Other |
+| 137 | 1 | Card_Type | `1`:VISA `2`:MASTER `3`:JCB `4`:U_CARD `5`:DINERS `6`:AE `7`:SMART CARD `8`:CUP `9`:Other |
 | 138 | 4 | Filler | Space |
 | 142 | 1 | Only_Credit | `1`:Force Credit, `2`:Force CUP |
 | 143 | 1 | *Filler* | Reserved (1-byte gap before Enc_Card_No) |
+
+> **Note on FISC Refund (Type 27)**:
+>
+> * **Offset 138** is 1 Byte Filler.
+> * **Offset 139** is 6 Bytes **Batch_Number** (Original Transaction Batch).
 
 #### Case B: Installment (Types 03, 04)
 
@@ -203,6 +222,20 @@ These fields change definition based on `Trans_Type`.
 | `4` | Refund Fail | 退款失敗 |
 | `5` | Order Not Found | 訂單資料不存在 |
 
+---
+
+#### Case E: National Pay Read-Card (Type 21)
+
+> [!NOTE]
+> Type 21 overwrites standard Offsets 90-137.
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 90 | 30 | **IC_Memo** | `IcCardCommet` (晶片卡備註) |
+| 120 | 8 | **TAC** | Chip Transaction Authentication Code |
+| 128 | 8 | **TCC_Code** | Terminal Check Code |
+| 136 | 1 | **Wave_Flag** | `1`: Contactless, `0`: Contact |
+
 ### 5.3 Tail Section (Offsets 144-600)
 
 | Offset | Len | Field Name | Req | Resp | Description |
@@ -225,16 +258,46 @@ These fields change definition based on `Trans_Type`.
 > **Note on Redeem (Type 80/81)**:
 > For Redeem transactions, offsets **194-318** have specific point definitions. See **Case C Tail Layout Override** in Section 5.2 for complete field definitions.
 
+> **Note on Kiosk Read-Card (Type 20)**:
+> For Type 20, Offset 294 is **1 byte** `Wave_Flag` (`1`:Contactless, `0`:Contact). Standard `Host_Resp` (4 bytes) is **NOT** present.
+
+#### Case F: EasyCard Tail Override (Types 31, 32)
+
+> **Offsets 102 to 335**: Empty/Filler (234 bytes).
+> **Offsets 336+**: Redefined as follows (Overwrites Add_Info/ESC).
+
+| Offset | Len | Field Name | Description |
+| :--- | :-- | :--- | :--- |
+| 336 | 1 | **Ticket_Type** | `1`:EasyCard `2`:iCash `3`:iPASS `4`:HappyCash |
+| 337 | 19 | **Ticket_Card_No**| Card ID |
+| 356 | 10 | Ticket_Ref_No | Reference Number |
+| 366 | 10 | Ticket_Batch | Batch Number |
+| 376 | 10 | Pre_Balance | Balance Before Tx |
+| 386 | 10 | Auto_Load_Amt | Auto-Load Amount |
+| 396 | 10 | **Balance** | Current Balance |
+| 406 | 194 | *Filler* | |
+
 ### 5.4 Special Layouts
 
 #### Type 51 (AUTO_SETTLE) Response Layout
 
 > [!IMPORTANT]
-> Type 51 returns a massive block of concatenated counters. **DO NOT** parse using Standard Header offsets after Offset 2.
+> Type 51 returns a massive block of concatenated counters. **DO NOT** parse using Standard Header offsets after Offset 4.
 
-* Starts at Offset 3 (after HostID).
-* Contains concatenated `Response_Code` (4 bytes) and `Status` (1 byte) for **all** host types (TCB, FISC, NP, AE, etc.).
+**Payload Structure:**
+
+* **Payload Start Offset:** **4** (0-1 `Trans_Type`, 2-3 `Host_ID`).
+* Contains concatenated `Response_Code` (4 bytes) and `Status` (1 byte) for **all** host types.
 * Followed by `SaleAmount`, `RefundAmount`, `SaleCount`, `RefundCount` for every host sequentially.
+
+**Fixed Host Order in Response:**
+
+1. **TCB** (General)
+2. **FISC** (SmartPay)
+3. **NP** (National Pay)
+4. **AE** (Amex)
+5. **INST** (Installment)
+6. **CMAS** (EasyCard)
 
 ---
 
@@ -284,3 +347,10 @@ These fields change definition based on `Trans_Type`.
     * A single original transaction (`STAN` / `Old_Order_No`) can only be refunded **once**. Subsequent attempts will be rejected by the FISC host.
 8. **AUTO_SETTLE (Type 51)**: Do not parse using Standard Header. See Section 5.4.
 9. **USER_LOGON (Type 92)**: Uses truncated layout without Amount/CardNo/Invoice fields. See Section 5.4.
+10. **Sale 2 Stage (Type 62)**: The `Trans_Amount` in the confirmation stage (Type 62) **cannot be greater** than the amount authorized in the initial Read Card stage (Type 60).
+11. **Config.dat Settings**:
+    * **Timeout Setup**: Configurable (Default 60s/70s).
+    * **Error Retry**: Default 3 times.
+12. **Type 21 vs 26**:
+    * **Type 21 (NP_READ_CARD)**: Read card data only. Returns TAC/TCC.
+    * **Type 26 (NP_SELF_SALE)**: Full transaction execution. Follows Type 05 layout.
