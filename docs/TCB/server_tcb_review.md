@@ -31,6 +31,15 @@
 
 结论：**状态机与 FSM 规范一致，可用于 Production 场景。**
 
+## 2.1 协议级 Schema 测试
+
+已新增 `server_tcb/protocol/layout_test.go`，覆盖：
+1. **字段边界检查**：所有字段位置与长度必须落在 1..600 范围内。  
+2. **重叠检测**：默认禁止重叠，若 Layout `notes` 明确标注 overlap（例如 3.1.10），则允许。  
+3. **构包/解包一致性**：对每个 Layout 随机填值后，Build -> Parse 的结果需一致。  
+
+结论：**Layout schema 完整、可用于 Production 解析。**
+
 ## 3. 架构一致性评估（对齐 architecture.md）
 
 | 架构点 | 现状 | 说明 |
