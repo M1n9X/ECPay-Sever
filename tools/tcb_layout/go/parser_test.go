@@ -14,7 +14,7 @@ func setField(payload []byte, pos, length int, value string) {
 }
 
 func TestParseLayout_3_1_1(t *testing.T) {
- layouts, err := LoadLayouts(filepath.FromSlash("../../../docs/tcb_layout_v36.json"))
+ layouts, err := LoadLayouts(filepath.FromSlash("../../../docs/TCB/tcb_layout_v36.json"))
  if err != nil {
   t.Fatalf("load layouts: %v", err)
  }
@@ -51,7 +51,7 @@ func TestParseLayout_3_1_1(t *testing.T) {
 }
 
 func TestParseLayout_3_1_14(t *testing.T) {
- layouts, err := LoadLayouts(filepath.FromSlash("../../../docs/tcb_layout_v36.json"))
+ layouts, err := LoadLayouts(filepath.FromSlash("../../../docs/TCB/tcb_layout_v36.json"))
  if err != nil {
   t.Fatalf("load layouts: %v", err)
  }
