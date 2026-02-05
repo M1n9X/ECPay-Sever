@@ -429,7 +429,20 @@ function App() {
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Order No</span>
                     <span className="font-mono text-xs">
-                      {state.lastResult?.OrderNo}
+                      {state.lastResult?.MerchantOrderNo ||
+                        state.lastResult?.OrderNo}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Invoice No</span>
+                    <span className="font-mono text-xs">
+                      {state.lastResult?.InvoiceNo}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Reference No</span>
+                    <span className="font-mono text-xs">
+                      {state.lastResult?.ReferenceNo}
                     </span>
                   </div>
                   <div className="flex justify-between">

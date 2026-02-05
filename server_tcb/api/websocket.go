@@ -217,12 +217,6 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 		fields[k] = v
 	}
 	if req.OrderNo != "" {
-		if _, ok := fields["Invoice_No"]; !ok {
-			fields["Invoice_No"] = req.OrderNo
-		}
-		if _, ok := fields["Reference_No"]; !ok {
-			fields["Reference_No"] = req.OrderNo
-		}
 		if _, ok := fields["Order_No"]; !ok {
 			fields["Order_No"] = req.OrderNo
 		}
@@ -307,6 +301,9 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 	result, err := h.Manager.ExecuteTransaction(tcbReq)
 	if err != nil {
 		payload := normalizeResponse(result)
+		if req.OrderNo != "" {
+			payload["MerchantOrderNo"] = req.OrderNo
+		}
 		h.sendTransaction(conn, "error", err.Error(), payload)
 		if idemKey != "" {
 			h.idemSetResult(idemKey, "error", err.Error(), payload)
@@ -316,6 +313,9 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 
 	// Success
 	payload := normalizeResponse(result)
+	if req.OrderNo != "" {
+		payload["MerchantOrderNo"] = req.OrderNo
+	}
 	h.sendTransaction(conn, "success", "Transaction Approved", payload)
 	if idemKey != "" {
 		h.idemSetResult(idemKey, "success", "Transaction Approved", payload)
@@ -452,6 +452,13 @@ func normalizeResponse(raw map[string]string) map[string]string {
 	approval := pickFirst(raw, []string{"Approval_No"})
 	orderNo := pickFirst(raw, []string{"Reference_No", "Invoice_No", "Order_No", "EC_Order_No"})
 	cardNo := pickFirst(raw, []string{"Card_No", "CardAccount"})
+	if cardNo == "" {
+		if v := pickFirst(raw, []string{"Encrypted Card Number"}); v != "" {
+			if safeMaskedCard(v) {
+				cardNo = v
+			}
+		}
+	}
 	respCode := pickFirst(raw, []string{"ECR_Response_Code", "TCB_ECR_Response_Code", "FISC_ECR_Response_Code", "NP_ECR_Response_Code", "INST_ECR_Response_Code", "AE_ECR_Response_Code"})
 	if respCode == "" {
 		respCode = pickFirstContains(raw, "ECR_Response_Code")
@@ -465,6 +472,18 @@ func normalizeResponse(raw map[string]string) map[string]string {
 	addIfEmpty("RespCode", respCode)
 
 	return data
+}
+
+func safeMaskedCard(val string) bool {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return false
+	}
+	if strings.Contains(val, "*") {
+		return true
+	}
+	// Avoid leaking encrypted blobs; allow typical PAN length only
+	return len(val) <= 19
 }
 
 func pickFirst(raw map[string]string, keys []string) string {

@@ -18,6 +18,9 @@ export interface POSResponse {
     ApprovalNo?: string;
     MerchantID?: string;
     OrderNo?: string;
+    MerchantOrderNo?: string;
+    Invoice_No?: string;
+    Reference_No?: string;
     CardNo?: string;
     RespCode?: string;
     state?: string;
@@ -107,11 +110,16 @@ export function usePOS(callbacks: POSCallbacks) {
             case "success":
               // Handle transaction responses
               if (resp.command_type === "transaction") {
+                const merchantOrderNo = resp.data?.MerchantOrderNo;
+                const orderNo = merchantOrderNo || resp.data?.OrderNo;
                 const result: TransactionResult = {
                   TransType: resp.data?.TransType,
                   Amount: resp.data?.Amount,
                   ApprovalNo: resp.data?.ApprovalNo,
-                  OrderNo: resp.data?.OrderNo,
+                  OrderNo: orderNo,
+                  MerchantOrderNo: merchantOrderNo,
+                  InvoiceNo: resp.data?.Invoice_No,
+                  ReferenceNo: resp.data?.Reference_No,
                   CardNo: resp.data?.CardNo,
                   RespCode: resp.data?.RespCode,
                 };
@@ -126,12 +134,17 @@ export function usePOS(callbacks: POSCallbacks) {
             case "error":
               // Only handle transaction responses
               if (resp.command_type === "transaction") {
+                const merchantOrderNo = resp.data?.MerchantOrderNo;
+                const orderNo = merchantOrderNo || resp.data?.OrderNo;
                 const result: TransactionResult = resp.data
                   ? {
                       TransType: resp.data?.TransType,
                       Amount: resp.data?.Amount,
                       ApprovalNo: resp.data?.ApprovalNo,
-                      OrderNo: resp.data?.OrderNo,
+                      OrderNo: orderNo,
+                      MerchantOrderNo: merchantOrderNo,
+                      InvoiceNo: resp.data?.Invoice_No,
+                      ReferenceNo: resp.data?.Reference_No,
                       CardNo: resp.data?.CardNo,
                       RespCode: resp.data?.RespCode,
                     }
@@ -173,11 +186,13 @@ export function usePOS(callbacks: POSCallbacks) {
       }
 
       addLog(`Sending ${command}: $${(parseInt(amount) / 100).toFixed(2)}`);
+      const generated =
+        orderNo && orderNo.trim().length > 0 ? orderNo.trim() : uuid();
       ws.current.send(
         JSON.stringify({
           command,
           amount,
-          order_no: orderNo,
+          order_no: generated,
         })
       );
       return true;
@@ -229,4 +244,16 @@ export function usePOS(callbacks: POSCallbacks) {
     sendRestart,
     requestStatus,
   };
+}
+
+function uuid(): string {
+  // Use Web Crypto if available; fallback to RFC4122 v4 format with Math.random
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }

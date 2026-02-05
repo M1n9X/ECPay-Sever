@@ -72,6 +72,9 @@ export interface TransactionResult {
   Amount?: string;
   ApprovalNo?: string;
   OrderNo?: string;
+  MerchantOrderNo?: string;
+  InvoiceNo?: string;
+  ReferenceNo?: string;
   CardNo?: string;
   RespCode?: string;
 }
