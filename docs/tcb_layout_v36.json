@@ -1,0 +1,2560 @@
+{
+  "spec": {
+    "name": "TCB POS RS232",
+    "version": "3.6",
+    "payload_len": 600,
+    "packet_len": 603,
+    "positions_are_1_based": true
+  },
+  "packet": {
+    "stx": "0x02",
+    "etx": "0x03",
+    "ack": "0x06",
+    "nak": "0x15",
+    "lrc": "XOR(DATA) XOR ETX (STX not included)"
+  },
+  "handshake": {
+    "ack_timeout_sec": 1,
+    "ack_repeat": 2,
+    "retry_on_nak": 3,
+    "response_ack_lose_total_sec": 5
+  },
+  "layouts": [
+    {
+      "section": "6.1",
+      "id": "3.1.1",
+      "name": "一般交易 (含支付寶)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "信用卡卡號 (左靠右補空白)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "Card_Expire_Date",
+          "desc": "信用卡有效期 (全部空白)"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 9,
+          "field": "Approval_No",
+          "desc": "授權碼 (左靠右補空白)"
+        },
+        {
+          "pos": 67,
+          "len": 12,
+          "field": "Auth_Amount",
+          "desc": "預先授權金額"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 12,
+          "field": "Reference_No",
+          "desc": "銀行交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 12,
+          "field": "Exp_Amount",
+          "desc": "其他金額"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_Id",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別 (SALE 01, REFUND 02)"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "Issuer Id",
+          "desc": "發卡代號"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "CardType",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 4,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 143,
+          "len": 1,
+          "field": "Only_Credit/CUP",
+          "desc": "強制信用卡/銀聯卡"
+        },
+        {
+          "pos": 144,
+          "len": 1,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 6,
+          "field": "STAN",
+          "desc": "端末交易序號 (支付寶)"
+        },
+        {
+          "pos": 217,
+          "len": 16,
+          "field": "Order_Num",
+          "desc": "訂單編號 (支付寶)"
+        },
+        {
+          "pos": 233,
+          "len": 16,
+          "field": "Old Order_Num",
+          "desc": "原訂單編號 (支付寶)"
+        },
+        {
+          "pos": 249,
+          "len": 14,
+          "field": "Old Trans_Time",
+          "desc": "原交易時間 (支付寶)"
+        },
+        {
+          "pos": 263,
+          "len": 32,
+          "field": "ALIPAY_ID",
+          "desc": "支付寶條碼"
+        },
+        {
+          "pos": 295,
+          "len": 4,
+          "field": "Host_Response_Code",
+          "desc": "信用卡主機回應碼"
+        },
+        {
+          "pos": 299,
+          "len": 15,
+          "field": "EDC_Merchant_ID",
+          "desc": "EDC 商店代號"
+        },
+        {
+          "pos": 314,
+          "len": 5,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 319,
+          "len": 30,
+          "field": "Additional Information",
+          "desc": "附加資料 (左靠右補空白)"
+        },
+        {
+          "pos": 349,
+          "len": 1,
+          "field": "ESC_Status",
+          "desc": "電簽簽名狀態"
+        },
+        {
+          "pos": 350,
+          "len": 4,
+          "field": "ESC_Response_Code",
+          "desc": "電簽主機回應碼"
+        },
+        {
+          "pos": 354,
+          "len": 247,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "01",
+        "02",
+        "22",
+        "23",
+        "24",
+        "25",
+        "30",
+        "60",
+        "62",
+        "70"
+      ],
+      "notes": "一般交易(含支付寶)。PDF 未明確列出所有交易別映射，以上為明示/常見使用。"
+    },
+    {
+      "section": "6.2",
+      "id": "3.1.2",
+      "name": "分期交易",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "信用卡卡號 (左靠右補空白)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "Card_Expire_Date",
+          "desc": "信用卡有效期 (全部空白)"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 9,
+          "field": "Approval_No",
+          "desc": "授權碼 (左靠右補空白)"
+        },
+        {
+          "pos": 67,
+          "len": 12,
+          "field": "DownPayment",
+          "desc": "首期金額"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 12,
+          "field": "Reference_No",
+          "desc": "銀行交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 12,
+          "field": "EachPayment",
+          "desc": "每期金額"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_Id",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別 (分期 SALE 03, 分期退貨 04)"
+        },
+        {
+          "pos": 135,
+          "len": 2,
+          "field": "Period",
+          "desc": "分期期數"
+        },
+        {
+          "pos": 137,
+          "len": 1,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "CardType",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 6,
+          "field": "InterestAmt",
+          "desc": "手續費"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 108,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 319,
+          "len": 30,
+          "field": "Additional Information",
+          "desc": "附加資料 (左靠右補空白)"
+        },
+        {
+          "pos": 349,
+          "len": 1,
+          "field": "ESC_Status",
+          "desc": "電簽簽名狀態"
+        },
+        {
+          "pos": 350,
+          "len": 4,
+          "field": "ESC_Response_Code",
+          "desc": "電簽主機回應碼"
+        },
+        {
+          "pos": 354,
+          "len": 247,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "03",
+        "04"
+      ]
+    },
+    {
+      "section": "6.3",
+      "id": "3.1.3",
+      "name": "繳費交易 (含全國性繳費)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "金融卡帳號 (左靠右補空白)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "IssureReturnCode",
+          "desc": "主機回應碼"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 7,
+          "field": "IssureSeqNo",
+          "desc": "主機查詢序號"
+        },
+        {
+          "pos": 65,
+          "len": 4,
+          "field": "FeeAmt",
+          "desc": "繳費作業手續費"
+        },
+        {
+          "pos": 69,
+          "len": 6,
+          "field": "ProcessCode",
+          "desc": "處理代碼 (逾時查詢用)"
+        },
+        {
+          "pos": 75,
+          "len": 4,
+          "field": "FiscCode",
+          "desc": "交易類別代碼 (逾時查詢用)"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 3,
+          "field": "ProcessStatus",
+          "desc": "主機處理狀況 (逾時查詢用)"
+        },
+        {
+          "pos": 94,
+          "len": 21,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_Id",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別 (全國繳費 05, 一般繳費 06)"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "Issuer Id",
+          "desc": "發卡代號"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "CardType",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 6,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 4,
+          "field": "Host_Resp_Code",
+          "desc": "主機回應碼 (欄位 39)"
+        },
+        {
+          "pos": 215,
+          "len": 4,
+          "field": "NP_Resp_Errcode",
+          "desc": "全國性繳費主機回應碼 (欄位 57)"
+        },
+        {
+          "pos": 219,
+          "len": 15,
+          "field": "EDC_Merchant_ID",
+          "desc": "EDC 商店代號"
+        },
+        {
+          "pos": 234,
+          "len": 16,
+          "field": "NP_Order_Number",
+          "desc": "全繳訂單編號"
+        },
+        {
+          "pos": 250,
+          "len": 69,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 319,
+          "len": 30,
+          "field": "Additional Information",
+          "desc": "附加資料 (左靠右補空白)"
+        },
+        {
+          "pos": 349,
+          "len": 1,
+          "field": "ESC_Status",
+          "desc": "電簽簽名狀態"
+        },
+        {
+          "pos": 350,
+          "len": 4,
+          "field": "ESC_Response_Code",
+          "desc": "電簽主機回應碼"
+        },
+        {
+          "pos": 354,
+          "len": 247,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "05",
+        "06",
+        "26"
+      ],
+      "notes": "欄位含逾時查詢用 ProcessCode/FiscCode，交易別 07 是否使用此版型需與銀行確認。"
+    },
+    {
+      "section": "6.4",
+      "id": "3.1.4",
+      "name": "無人信用卡自助交易 (純讀卡，交易別 20)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "信用卡卡號 (左靠右補空白，不遮掩)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "Card_Expire_Date",
+          "desc": "信用卡有效期 (不遮掩)"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 9,
+          "field": "Approval_No",
+          "desc": "授權碼 (左靠右補空白)"
+        },
+        {
+          "pos": 67,
+          "len": 12,
+          "field": "Auth_Amount",
+          "desc": "預先授權金額"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 12,
+          "field": "Reference_No",
+          "desc": "銀行交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 12,
+          "field": "Exp_Amount",
+          "desc": "其他金額"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_Id",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別 (SALE 01, REFUND 02)"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "Issuer Id",
+          "desc": "發卡代號"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "CardType",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 6,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 6,
+          "field": "STAN",
+          "desc": "端末交易序號 (支付寶)"
+        },
+        {
+          "pos": 217,
+          "len": 16,
+          "field": "Order_Num",
+          "desc": "訂單編號 (支付寶)"
+        },
+        {
+          "pos": 233,
+          "len": 16,
+          "field": "Old Order_Num",
+          "desc": "原訂單編號 (支付寶)"
+        },
+        {
+          "pos": 249,
+          "len": 14,
+          "field": "Old Trans_Time",
+          "desc": "原交易時間 (支付寶)"
+        },
+        {
+          "pos": 263,
+          "len": 32,
+          "field": "ALIPAY_ID",
+          "desc": "支付寶條碼 (支付寶)"
+        },
+        {
+          "pos": 295,
+          "len": 1,
+          "field": "WaveFlag",
+          "desc": "感應交易碼 (1 感應, 0 一般)"
+        },
+        {
+          "pos": 296,
+          "len": 23,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 319,
+          "len": 30,
+          "field": "Additional Information",
+          "desc": "附加資料 (左靠右補空白)"
+        },
+        {
+          "pos": 349,
+          "len": 252,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "20"
+      ]
+    },
+    {
+      "section": "6.5",
+      "id": "3.1.5",
+      "name": "無人全國性繳費自助交易 (純讀卡，交易別 21)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 8,
+          "field": "IssuerId",
+          "desc": "轉出銀行代號"
+        },
+        {
+          "pos": 11,
+          "len": 8,
+          "field": "STAN",
+          "desc": "晶片卡交易序號"
+        },
+        {
+          "pos": 19,
+          "len": 15,
+          "field": "RFU",
+          "desc": "保留"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 14,
+          "field": "Trans_DateTime",
+          "desc": "交易日期時間"
+        },
+        {
+          "pos": 60,
+          "len": 16,
+          "field": "CardAccount",
+          "desc": "轉出帳號"
+        },
+        {
+          "pos": 76,
+          "len": 3,
+          "field": "RFU",
+          "desc": "保留"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 30,
+          "field": "IcCardComment",
+          "desc": "晶片卡備註"
+        },
+        {
+          "pos": 121,
+          "len": 8,
+          "field": "TAC",
+          "desc": "晶片交易驗證碼"
+        },
+        {
+          "pos": 129,
+          "len": 8,
+          "field": "TccCode",
+          "desc": "端末設備查核碼"
+        },
+        {
+          "pos": 137,
+          "len": 1,
+          "field": "WaveFlag",
+          "desc": "感應交易碼 (1 感應, 0 一般)"
+        },
+        {
+          "pos": 138,
+          "len": 7,
+          "field": "RFU",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 108,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 319,
+          "len": 30,
+          "field": "Additional Information",
+          "desc": "附加資料 (左靠右補空白)"
+        },
+        {
+          "pos": 349,
+          "len": 252,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "21"
+      ]
+    },
+    {
+      "section": "6.6",
+      "id": "3.1.6",
+      "name": "結帳交易 (交易別 50)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 74,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 54,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 12,
+          "field": "Sale_Amount",
+          "desc": "銷售總金額"
+        },
+        {
+          "pos": 157,
+          "len": 12,
+          "field": "Refund_Amount",
+          "desc": "退貨總金額"
+        },
+        {
+          "pos": 169,
+          "len": 3,
+          "field": "Sale_Count",
+          "desc": "銷貨筆數"
+        },
+        {
+          "pos": 172,
+          "len": 3,
+          "field": "Refund_Count",
+          "desc": "退貨筆數"
+        },
+        {
+          "pos": 175,
+          "len": 4,
+          "field": "Host_Resp_Code",
+          "desc": "主機回應碼 (欄位 39)"
+        },
+        {
+          "pos": 179,
+          "len": 170,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 349,
+          "len": 1,
+          "field": "ESC_Status",
+          "desc": "電簽簽名狀態"
+        },
+        {
+          "pos": 350,
+          "len": 4,
+          "field": "ESC_Response_Code",
+          "desc": "電簽主機回應碼"
+        },
+        {
+          "pos": 354,
+          "len": 247,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "50"
+      ]
+    },
+    {
+      "section": "6.7",
+      "id": "3.1.7",
+      "name": "連動結帳交易 (交易別 51)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 74,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "TCB_ECR_Response_Code",
+          "desc": "收銀機通訊回應碼 (TCB)"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 1,
+          "field": "TCB_SETTLE_ESC_Status",
+          "desc": "信用卡結帳電簽簽名狀態"
+        },
+        {
+          "pos": 92,
+          "len": 4,
+          "field": "TCB_SETTLE_ESC_Response_Code",
+          "desc": "信用卡結帳電簽主機回應碼"
+        },
+        {
+          "pos": 96,
+          "len": 1,
+          "field": "FISC_SETTLE_ESC_Status",
+          "desc": "金融卡結帳電簽簽名狀態"
+        },
+        {
+          "pos": 97,
+          "len": 4,
+          "field": "FISC_SETTLE_ESC_Response_Code",
+          "desc": "金融卡結帳電簽主機回應碼"
+        },
+        {
+          "pos": 101,
+          "len": 1,
+          "field": "NP_SETTLE_ESC_Status",
+          "desc": "全國性繳費結帳電簽簽名狀態"
+        },
+        {
+          "pos": 102,
+          "len": 4,
+          "field": "NP_SETTLE_ESC_Response_Code",
+          "desc": "全國性繳費結帳電簽主機回應碼"
+        },
+        {
+          "pos": 106,
+          "len": 1,
+          "field": "AE_SETTLE_ESC_Status",
+          "desc": "美國運通結帳電簽簽名狀態"
+        },
+        {
+          "pos": 107,
+          "len": 4,
+          "field": "AE_SETTLE_ESC_Response_Code",
+          "desc": "美國運通結帳電簽主機回應碼"
+        },
+        {
+          "pos": 111,
+          "len": 34,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 12,
+          "field": "TCB_Sale_Amount",
+          "desc": "信用卡銷售總金額"
+        },
+        {
+          "pos": 157,
+          "len": 12,
+          "field": "TCB_Refund_Amount",
+          "desc": "信用卡退貨總金額"
+        },
+        {
+          "pos": 169,
+          "len": 3,
+          "field": "TCB_Sale_Count",
+          "desc": "信用卡銷貨筆數"
+        },
+        {
+          "pos": 172,
+          "len": 3,
+          "field": "TCB_Refund_Count",
+          "desc": "信用卡退貨筆數"
+        },
+        {
+          "pos": 175,
+          "len": 4,
+          "field": "TCB_Host_Resp_Code",
+          "desc": "信用卡主機回應碼"
+        },
+        {
+          "pos": 179,
+          "len": 4,
+          "field": "FISC_ECR_Response_Code",
+          "desc": "收銀機通訊回應碼 (FISC)"
+        },
+        {
+          "pos": 183,
+          "len": 12,
+          "field": "FISC_Sale_Amount",
+          "desc": "金融卡銷售總金額"
+        },
+        {
+          "pos": 195,
+          "len": 12,
+          "field": "FISC_Refund_Amount",
+          "desc": "金融卡退貨總金額"
+        },
+        {
+          "pos": 207,
+          "len": 3,
+          "field": "FISC_Sale_Count",
+          "desc": "金融卡銷貨筆數"
+        },
+        {
+          "pos": 210,
+          "len": 3,
+          "field": "FISC_Refund_Count",
+          "desc": "金融卡退貨筆數"
+        },
+        {
+          "pos": 213,
+          "len": 4,
+          "field": "FISC_Host_Resp_Code",
+          "desc": "金融卡主機回應碼"
+        },
+        {
+          "pos": 217,
+          "len": 4,
+          "field": "NP_ECR_Response_Code",
+          "desc": "收銀機通訊回應碼 (NP)"
+        },
+        {
+          "pos": 221,
+          "len": 12,
+          "field": "NP_Sale_Amount",
+          "desc": "全國性繳費銷售總金額"
+        },
+        {
+          "pos": 233,
+          "len": 3,
+          "field": "NP_Sale_Count",
+          "desc": "全國性繳費銷貨筆數"
+        },
+        {
+          "pos": 236,
+          "len": 4,
+          "field": "NP_Host_Resp_Code_F39",
+          "desc": "全國性繳費主機回應碼 (F39)"
+        },
+        {
+          "pos": 240,
+          "len": 4,
+          "field": "NP_Host_Resp_Code_F57",
+          "desc": "全國性繳費主機回應碼 (F57)"
+        },
+        {
+          "pos": 244,
+          "len": 4,
+          "field": "INST_ECR_Response_Code",
+          "desc": "收銀機通訊回應碼 (INST)"
+        },
+        {
+          "pos": 248,
+          "len": 12,
+          "field": "INST_Sale_Amount",
+          "desc": "分期銷售總金額"
+        },
+        {
+          "pos": 260,
+          "len": 12,
+          "field": "INST_Refund_Amount",
+          "desc": "分期退貨總金額"
+        },
+        {
+          "pos": 272,
+          "len": 3,
+          "field": "INST_Sale_Count",
+          "desc": "分期銷貨筆數"
+        },
+        {
+          "pos": 275,
+          "len": 3,
+          "field": "INST_Refund_Count",
+          "desc": "分期退貨筆數"
+        },
+        {
+          "pos": 278,
+          "len": 4,
+          "field": "INST_Host_Resp_Code",
+          "desc": "分期主機回應碼"
+        },
+        {
+          "pos": 282,
+          "len": 4,
+          "field": "AE_ECR_Response_Code",
+          "desc": "收銀機通訊回應碼 (AE)"
+        },
+        {
+          "pos": 286,
+          "len": 12,
+          "field": "AE_Sale_Amount",
+          "desc": "美國運通銷售總金額"
+        },
+        {
+          "pos": 298,
+          "len": 12,
+          "field": "AE_Refund_Amount",
+          "desc": "美國運通退貨總金額"
+        },
+        {
+          "pos": 310,
+          "len": 3,
+          "field": "AE_Sale_Count",
+          "desc": "美國運通銷貨筆數"
+        },
+        {
+          "pos": 313,
+          "len": 3,
+          "field": "AE_Refund_Count",
+          "desc": "美國運通退貨筆數"
+        },
+        {
+          "pos": 316,
+          "len": 4,
+          "field": "AE_Host_Resp_Code",
+          "desc": "美國運通主機回應碼"
+        },
+        {
+          "pos": 320,
+          "len": 4,
+          "field": "CMAS_ECR_Response_Code",
+          "desc": "收銀機通訊回應碼 (CMAS)"
+        },
+        {
+          "pos": 324,
+          "len": 12,
+          "field": "CMAS_Sale_Amount",
+          "desc": "悠遊卡銷售總金額"
+        },
+        {
+          "pos": 336,
+          "len": 12,
+          "field": "CMAS_Refund_Amount",
+          "desc": "悠遊卡退貨總金額"
+        },
+        {
+          "pos": 348,
+          "len": 3,
+          "field": "CMAS_Sale_Count",
+          "desc": "悠遊卡銷貨筆數"
+        },
+        {
+          "pos": 351,
+          "len": 3,
+          "field": "CMAS_Refund_Count",
+          "desc": "悠遊卡退貨筆數"
+        },
+        {
+          "pos": 354,
+          "len": 4,
+          "field": "CMAS_Host_Resp_Code",
+          "desc": "悠遊卡主機回應碼"
+        },
+        {
+          "pos": 358,
+          "len": 243,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "51"
+      ]
+    },
+    {
+      "section": "6.8",
+      "id": "3.1.8",
+      "name": "主機帳務回傳 (交易別 11)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "DINES",
+          "desc": "大來卡 (代號 00)"
+        },
+        {
+          "pos": 5,
+          "len": 12,
+          "field": "DINES_Sale_Amount",
+          "desc": "銷售總金額 (含小費)"
+        },
+        {
+          "pos": 17,
+          "len": 12,
+          "field": "DINES_Refund_Amount",
+          "desc": "退貨總金額"
+        },
+        {
+          "pos": 29,
+          "len": 12,
+          "field": "DINES_Void_Amount",
+          "desc": "取消總金額"
+        },
+        {
+          "pos": 41,
+          "len": 3,
+          "field": "DINES_Sale_Count",
+          "desc": "銷貨筆數"
+        },
+        {
+          "pos": 44,
+          "len": 3,
+          "field": "DINES_Refund_Count",
+          "desc": "退貨筆數"
+        },
+        {
+          "pos": 47,
+          "len": 3,
+          "field": "DINES_Void_Count",
+          "desc": "取消筆數"
+        },
+        {
+          "pos": 50,
+          "len": 2,
+          "field": "AE",
+          "desc": "美國運通卡 (代號 01)"
+        },
+        {
+          "pos": 52,
+          "len": 12,
+          "field": "AE_Sale_Amount",
+          "desc": "銷售總金額 (含小費)"
+        },
+        {
+          "pos": 64,
+          "len": 12,
+          "field": "AE_Refund_Amount",
+          "desc": "退貨總金額"
+        },
+        {
+          "pos": 76,
+          "len": 12,
+          "field": "AE_Void_Amount",
+          "desc": "取消總金額"
+        },
+        {
+          "pos": 88,
+          "len": 3,
+          "field": "AE_Sale_Count",
+          "desc": "銷貨筆數"
+        },
+        {
+          "pos": 91,
+          "len": 3,
+          "field": "AE_Refund_Count",
+          "desc": "退貨筆數"
+        },
+        {
+          "pos": 94,
+          "len": 3,
+          "field": "AE_Void_Count",
+          "desc": "取消筆數"
+        },
+        {
+          "pos": 97,
+          "len": 2,
+          "field": "TCB",
+          "desc": "合庫 (代號 02)"
+        },
+        {
+          "pos": 99,
+          "len": 12,
+          "field": "TCB_Sale_Amount",
+          "desc": "銷售總金額 (含小費)"
+        },
+        {
+          "pos": 111,
+          "len": 12,
+          "field": "TCB_Refund_Amount",
+          "desc": "退貨總金額"
+        },
+        {
+          "pos": 123,
+          "len": 12,
+          "field": "TCB_Void_Amount",
+          "desc": "取消總金額"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "TCB_Sale_Count",
+          "desc": "銷貨筆數"
+        },
+        {
+          "pos": 138,
+          "len": 3,
+          "field": "TCB_Refund_Count",
+          "desc": "退貨筆數"
+        },
+        {
+          "pos": 141,
+          "len": 3,
+          "field": "TCB_Void_Count",
+          "desc": "取消筆數"
+        },
+        {
+          "pos": 144,
+          "len": 2,
+          "field": "FISC",
+          "desc": "金融卡 (代號 03)"
+        },
+        {
+          "pos": 146,
+          "len": 12,
+          "field": "FISC_Sale_Amount",
+          "desc": "銷售總金額 (含小費)"
+        },
+        {
+          "pos": 158,
+          "len": 12,
+          "field": "FISC_Refund_Amount",
+          "desc": "退貨總金額"
+        },
+        {
+          "pos": 170,
+          "len": 12,
+          "field": "FISC_Void_Amount",
+          "desc": "取消總金額"
+        },
+        {
+          "pos": 182,
+          "len": 3,
+          "field": "FISC_Sale_Count",
+          "desc": "銷貨筆數"
+        },
+        {
+          "pos": 185,
+          "len": 3,
+          "field": "FISC_Refund_Count",
+          "desc": "退貨筆數"
+        },
+        {
+          "pos": 188,
+          "len": 3,
+          "field": "FISC_Void_Count",
+          "desc": "取消筆數"
+        },
+        {
+          "pos": 191,
+          "len": 2,
+          "field": "INST",
+          "desc": "分期主機 (代號 04)"
+        },
+        {
+          "pos": 193,
+          "len": 12,
+          "field": "INST_Sale_Amount",
+          "desc": "銷售總金額 (含小費)"
+        },
+        {
+          "pos": 205,
+          "len": 12,
+          "field": "INST_Refund_Amount",
+          "desc": "退貨總金額"
+        },
+        {
+          "pos": 217,
+          "len": 12,
+          "field": "INST_Void_Amount",
+          "desc": "取消總金額"
+        },
+        {
+          "pos": 229,
+          "len": 3,
+          "field": "INST_Sale_Count",
+          "desc": "銷貨筆數"
+        },
+        {
+          "pos": 232,
+          "len": 3,
+          "field": "INST_Refund_Count",
+          "desc": "退貨筆數"
+        },
+        {
+          "pos": 235,
+          "len": 3,
+          "field": "INST_Void_Count",
+          "desc": "取消筆數"
+        },
+        {
+          "pos": 238,
+          "len": 363,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "11"
+      ]
+    },
+    {
+      "section": "6.9",
+      "id": "3.1.9",
+      "name": "紅利交易 (交易別 80, 81)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "信用卡卡號 (左靠右補空白)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "Card_Expire_Date",
+          "desc": "信用卡有效期 (全部空白)"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 9,
+          "field": "Approval_No",
+          "desc": "授權碼 (左靠右補空白)"
+        },
+        {
+          "pos": 67,
+          "len": 6,
+          "field": "Redeem_ActNum",
+          "desc": "紅利活動編號"
+        },
+        {
+          "pos": 73,
+          "len": 1,
+          "field": "Redeem_Config",
+          "desc": "紅利折抵說明"
+        },
+        {
+          "pos": 74,
+          "len": 2,
+          "field": "Redeem_Response",
+          "desc": "紅利折抵結果回應碼"
+        },
+        {
+          "pos": 76,
+          "len": 1,
+          "field": "Redeem_Balance_Sign",
+          "desc": "紅利餘額點數正負號"
+        },
+        {
+          "pos": 77,
+          "len": 2,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 12,
+          "field": "Reference_No",
+          "desc": "銀行交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 12,
+          "field": "Amount_After_Cost",
+          "desc": "扣抵後消費金額"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_Id",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "CardType",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 4,
+          "field": "Org_Trans_Date",
+          "desc": "原交易日期 (MMDD)"
+        },
+        {
+          "pos": 143,
+          "len": 2,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 10,
+          "field": "Redeem_Point_Remain",
+          "desc": "紅利餘額點數 (右靠左補 0)"
+        },
+        {
+          "pos": 205,
+          "len": 10,
+          "field": "Redeem_Point_Cost",
+          "desc": "扣抵紅利點數 (右靠左補 0)"
+        },
+        {
+          "pos": 215,
+          "len": 104,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 319,
+          "len": 30,
+          "field": "Additional Information",
+          "desc": "附加資料 (左靠右補空白)"
+        },
+        {
+          "pos": 349,
+          "len": 1,
+          "field": "ESC_Status",
+          "desc": "電簽簽名狀態"
+        },
+        {
+          "pos": 350,
+          "len": 4,
+          "field": "ESC_Response_Code",
+          "desc": "電簽主機回應碼"
+        },
+        {
+          "pos": 354,
+          "len": 247,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "80",
+        "81"
+      ]
+    },
+    {
+      "section": "6.10",
+      "id": "3.1.10",
+      "name": "悠遊卡交易 (交易別 31, 32)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 29,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 21,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 14,
+          "field": "Reference_No",
+          "desc": "銀行交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 234,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 337,
+          "len": 1,
+          "field": "Ticket_Type",
+          "desc": "電子票證名稱類別"
+        },
+        {
+          "pos": 338,
+          "len": 19,
+          "field": "Ticket_Card_Number",
+          "desc": "電子票證卡號"
+        },
+        {
+          "pos": 357,
+          "len": 10,
+          "field": "Ticket_Reference_Number",
+          "desc": "電子票證交易序號"
+        },
+        {
+          "pos": 367,
+          "len": 10,
+          "field": "Ticket_Batch_Number",
+          "desc": "批次號碼"
+        },
+        {
+          "pos": 377,
+          "len": 10,
+          "field": "Ticket_Pre_Balance",
+          "desc": "交易前餘額"
+        },
+        {
+          "pos": 387,
+          "len": 10,
+          "field": "Ticket_Auto_Load_Amount",
+          "desc": "自動加值金額"
+        },
+        {
+          "pos": 397,
+          "len": 10,
+          "field": "Ticket_Balance",
+          "desc": "消費後餘額"
+        },
+        {
+          "pos": 407,
+          "len": 194,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "31",
+        "32"
+      ],
+      "notes": "PDF 3.1.10 has an internal overlap: Reference_No(91,len14) and Filler(103,len234). Keep as-is for fidelity to PDF; parsers should prioritize Reference_No."
+    },
+    {
+      "section": "6.11",
+      "id": "3.1.11",
+      "name": "金融卡退貨 (交易別 27)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "信用卡卡號 (左靠右補空白)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "Card_Expire_Date",
+          "desc": "信用卡有效期 (全部空白)"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額 (小於等於原交易)"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "原交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "原交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 9,
+          "field": "Approval_No",
+          "desc": "授權碼 (左靠右補空白)"
+        },
+        {
+          "pos": 67,
+          "len": 12,
+          "field": "Auth_Amount",
+          "desc": "預先授權金額"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "原 EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 12,
+          "field": "Reference_No",
+          "desc": "原交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 12,
+          "field": "Exp_Amount",
+          "desc": "其他金額"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_Id",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別 (SALE 01, REFUND 02)"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "Issuer Id",
+          "desc": "發卡代號"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "CardType",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 6,
+          "field": "Batch_Number",
+          "desc": "原交易批次"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 84,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 295,
+          "len": 4,
+          "field": "Host_Response_Code",
+          "desc": "金融卡主機回應碼"
+        },
+        {
+          "pos": 299,
+          "len": 15,
+          "field": "EDC_Merchant_ID",
+          "desc": "商代"
+        },
+        {
+          "pos": 314,
+          "len": 5,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 319,
+          "len": 30,
+          "field": "Additional Information",
+          "desc": "附加資料 (左靠右補空白)"
+        },
+        {
+          "pos": 349,
+          "len": 1,
+          "field": "ESC_Status",
+          "desc": "電簽簽名狀態"
+        },
+        {
+          "pos": 350,
+          "len": 4,
+          "field": "ESC_Response_Code",
+          "desc": "電簽主機回應碼"
+        },
+        {
+          "pos": 354,
+          "len": 247,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "27"
+      ],
+      "notes": "Official clarification: FISC Refund response does NOT include Cancel Debt Number and Batch_Number. Layout positions remain for fixed-length payload, but response fields may be blank."
+    },
+    {
+      "section": "6.12",
+      "id": "3.1.12",
+      "name": "交易回傳 (交易別 91)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "信用卡卡號 (左靠右補空白)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "Card_Expire_Date",
+          "desc": "信用卡有效期 (全部空白)"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 9,
+          "field": "Approval_No",
+          "desc": "授權碼 (左靠右補空白)"
+        },
+        {
+          "pos": 67,
+          "len": 12,
+          "field": "Auth_Amount",
+          "desc": "預先授權金額"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 12,
+          "field": "Reference_No",
+          "desc": "銀行交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 12,
+          "field": "Exp_Amount",
+          "desc": "其他金額"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_ID",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別 (SALE 01, REFUND 02)"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "Issuer_ID",
+          "desc": "發卡代號"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "Card_Type",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 4,
+          "field": "Org_Trans_Date",
+          "desc": "原交易日期 (MMDD)"
+        },
+        {
+          "pos": 143,
+          "len": 2,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 6,
+          "field": "STAN",
+          "desc": "端末交易序號 (支付寶)"
+        },
+        {
+          "pos": 217,
+          "len": 16,
+          "field": "Order_Num",
+          "desc": "訂單編號 (支付寶)"
+        },
+        {
+          "pos": 233,
+          "len": 16,
+          "field": "Old Order_Num",
+          "desc": "原訂單編號 (支付寶)"
+        },
+        {
+          "pos": 249,
+          "len": 14,
+          "field": "Old Trans_Time",
+          "desc": "原交易時間 (支付寶)"
+        },
+        {
+          "pos": 263,
+          "len": 32,
+          "field": "ALIPAY_ID",
+          "desc": "支付寶條碼"
+        },
+        {
+          "pos": 295,
+          "len": 4,
+          "field": "Host_Response_Code",
+          "desc": "信用卡主機回應碼"
+        },
+        {
+          "pos": 299,
+          "len": 15,
+          "field": "EDC_Merchant_ID",
+          "desc": "EDC 商店代號"
+        },
+        {
+          "pos": 314,
+          "len": 287,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "91"
+      ],
+      "notes": "Official clarification: Trans Return (91) uses this 3.1.12 layout."
+    },
+    {
+      "section": "6.13",
+      "id": "3.1.13",
+      "name": "使用者登入回傳 (交易別 92)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 2,
+          "field": "Host_ID",
+          "desc": "銀行別"
+        },
+        {
+          "pos": 5,
+          "len": 6,
+          "field": "Invoice_No",
+          "desc": "EDC 簽單調閱編號"
+        },
+        {
+          "pos": 11,
+          "len": 19,
+          "field": "Card_No",
+          "desc": "信用卡卡號 (左靠右補空白)"
+        },
+        {
+          "pos": 30,
+          "len": 4,
+          "field": "Card_Expire_Date",
+          "desc": "信用卡有效期 (全部空白)"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 9,
+          "field": "Approval_No",
+          "desc": "授權碼 (左靠右補空白)"
+        },
+        {
+          "pos": 67,
+          "len": 12,
+          "field": "Auth_Amount",
+          "desc": "預先授權金額"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 8,
+          "field": "EDC_Terminal_ID",
+          "desc": "EDC 端末機代號"
+        },
+        {
+          "pos": 91,
+          "len": 12,
+          "field": "Reference_No",
+          "desc": "銀行交易序號"
+        },
+        {
+          "pos": 103,
+          "len": 12,
+          "field": "Exp_Amount",
+          "desc": "其他金額"
+        },
+        {
+          "pos": 115,
+          "len": 18,
+          "field": "Store_Id",
+          "desc": "專櫃號"
+        },
+        {
+          "pos": 133,
+          "len": 2,
+          "field": "Start Get PAN",
+          "desc": "交易別 (SALE 01, REFUND 02)"
+        },
+        {
+          "pos": 135,
+          "len": 3,
+          "field": "Issuer Id",
+          "desc": "發卡代號"
+        },
+        {
+          "pos": 138,
+          "len": 1,
+          "field": "CardType",
+          "desc": "卡片代碼"
+        },
+        {
+          "pos": 139,
+          "len": 6,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 145,
+          "len": 50,
+          "field": "Encrypted Card Number",
+          "desc": "加密卡號"
+        },
+        {
+          "pos": 195,
+          "len": 16,
+          "field": "Cancel Debt Number",
+          "desc": "銷帳編號"
+        },
+        {
+          "pos": 211,
+          "len": 6,
+          "field": "STAN",
+          "desc": "端末交易序號 (支付寶)"
+        },
+        {
+          "pos": 217,
+          "len": 16,
+          "field": "Order_Num",
+          "desc": "訂單編號 (支付寶)"
+        },
+        {
+          "pos": 233,
+          "len": 16,
+          "field": "Old Order_Num",
+          "desc": "原訂單編號 (支付寶)"
+        },
+        {
+          "pos": 249,
+          "len": 14,
+          "field": "Old Trans_Time",
+          "desc": "原交易時間 (支付寶)"
+        },
+        {
+          "pos": 263,
+          "len": 32,
+          "field": "ALIPAY_ID",
+          "desc": "支付寶條碼"
+        },
+        {
+          "pos": 295,
+          "len": 4,
+          "field": "Host_Response_Code",
+          "desc": "信用卡主機回應碼"
+        },
+        {
+          "pos": 299,
+          "len": 15,
+          "field": "EDC_Merchant_ID",
+          "desc": "EDC 商店代號"
+        },
+        {
+          "pos": 314,
+          "len": 287,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "92"
+      ],
+      "notes": "Official clarification: User Logon Return (92) uses this 3.1.13 layout; ECR_Response_Code 0000=success, 0001=failure."
+    },
+    {
+      "section": "6.14",
+      "id": "3.1.14",
+      "name": "英特拉交易 (交易別 36, 37, 38, 39)",
+      "fields": [
+        {
+          "pos": 1,
+          "len": 2,
+          "field": "Trans_Type",
+          "desc": "交易別"
+        },
+        {
+          "pos": 3,
+          "len": 31,
+          "field": "Filler",
+          "desc": "保留"
+        },
+        {
+          "pos": 34,
+          "len": 12,
+          "field": "Trans_Amount",
+          "desc": "交易金額"
+        },
+        {
+          "pos": 46,
+          "len": 6,
+          "field": "Trans_Date",
+          "desc": "交易日期"
+        },
+        {
+          "pos": 52,
+          "len": 6,
+          "field": "Trans_Time",
+          "desc": "交易時間"
+        },
+        {
+          "pos": 58,
+          "len": 20,
+          "field": "Order_Num",
+          "desc": "訂單編號"
+        },
+        {
+          "pos": 78,
+          "len": 1,
+          "field": "Order_Status",
+          "desc": "訂單狀態"
+        },
+        {
+          "pos": 79,
+          "len": 4,
+          "field": "ECR_Response_Code",
+          "desc": "通訊回應碼"
+        },
+        {
+          "pos": 83,
+          "len": 4,
+          "field": "INTELLA_Response_Code",
+          "desc": "英特拉回應碼"
+        },
+        {
+          "pos": 87,
+          "len": 512,
+          "field": "Scan_Data",
+          "desc": "英特拉被掃掃碼資料 (左靠右補空白)"
+        },
+        {
+          "pos": 599,
+          "len": 2,
+          "field": "Filler",
+          "desc": "保留"
+        }
+      ],
+      "trans_types": [
+        "36",
+        "37",
+        "38",
+        "39"
+      ]
+    }
+  ],
+  "notes": {
+    "mapping": "Trans_Type to layout mapping is based on PDF v3.6 Section 3.1/3.2. Flow-specific types (60/62/70, 52) have limited field lists in Section 4; use those flow lists when constructing requests/responses."
+  }
+}

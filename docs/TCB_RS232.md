@@ -807,7 +807,7 @@ POS -> EDC: Trans_Type ("02") + Trans_Amount + Reference_No
 EDC -> POS: Trans_Type + Host_ID + Invoice_No + Card_No + Trans_Amount + Trans_Date + Trans_Time + Approval_No + DownPayment + ECR_Response_Code + EDC_Terminal_ID + Reference_No + EachPayment + Period + CardType + InsterestAmt + Encrypted_Card_Number + ESC_Status + ESC_Response_Code
 
 Notes:
-- PDF 此處標示 Trans_Type 為 02，與 3.2 Trans_Type 列表中的分期退貨 04 不一致。請實作前與銀行確認。  
+- 官方說明：分期退貨正確 Trans_Type 為 `04`。  
 - ESC_Status/ESC_Response_Code 僅在 ECR 電簽上傳回傳開關開啟且交易成功後回傳。
 
 ### 8.8 Inst Refund (分期退貨) 二段式連線
@@ -876,6 +876,7 @@ POS -> EDC: Trans_Type ("27") + Trans_Amount + Reference_No
 EDC -> POS: Trans_Type + Host_ID + Invoice_No + Card_No + Trans_Amount + Trans_Date + Trans_Time + Approval_No + ECR_Response_Code + EDC_Terminal_ID + Reference_No + Issuer_ID + CardType + Host_Response_Code + EDC_Merchant_ID + ESC_Status + ESC_Response_Code
 
 Notes:
+- 官方說明：金融卡退貨回傳**不包含** `Cancel Debt Number` 與 `Batch_Number`。  
 - ESC_Status/ESC_Response_Code 僅在 ECR 電簽上傳回傳開關開啟且交易成功後回傳。
 
 ### 8.17 Trans Return (交易回傳)
@@ -883,6 +884,7 @@ POS -> EDC: Trans_Type ("91") + Host_ID + Invoice_No
 EDC -> POS: Trans_Type + Host_ID + Invoice_No + Card_No + Trans_Amount + Trans_Date + Trans_Time + Approval_No + ECR_Response_Code + EDC_Terminal_ID + Reference_No + Card_Type + Encrypted_Card_No + CancelDebtNo + Host_Response_Code + EDC_Merchant_ID
 
 Notes:
+- 官方說明：交易回傳以 **3.1.12** 版型為準。  
 - 刷卡機請回傳實際交易別 Trans_Type。  
 - 請依據原交易類型回傳授權結果。  
 - 若收銀機沒給 Invoice_No 則回傳最後一筆。
@@ -891,11 +893,15 @@ Notes:
 POS -> EDC: Trans_Type ("52") + Host_ID  
 EDC -> POS: Trans_Type + Host_ID + Trans_Date + Trans_Time + ECR_Response_Code + EDC_Terminal_ID + EDC_Merchant_ID
 
+Notes:
+- 官方說明：列印明細回傳欄位位置可參考 **3.1.1 一般交易**。
+
 ### 8.19 UserLOGON Return (使用者登入回傳)
 POS -> EDC: Trans_Type ("92")  
 EDC -> POS: Trans_Type + Trans_Date + Trans_Time + ECR_Response_Code + EDC_Terminal_ID + EDC_Merchant_ID
 
 Notes:
+- 官方說明：使用者登入回傳以 **3.1.13** 版型為準，主要用於全國性繳費登入狀態確認。  
 - ECR_Response_Code 0000 表示使用者登入成功，0001 表示使用者登入失敗。
 
 ### 8.20 INTELLA OLPAY (英特拉主掃)
@@ -933,6 +939,7 @@ Notes:
 
 以下為 PDF v3.6 內部不一致處，已在本文件相應章節加註提醒，供實作時特別注意：
 
-- Section 4.7 分期退貨一段式流程標示 `Trans_Type ("02")`，但 Section 3.2 明確定義分期退貨為 `04`，且 Start Get PAN 亦標示分期退貨為 `04`。  
-- Section 4.16 金融卡退貨回傳欄位清單未包含 `Cancel Debt Number` 與 `Batch_Number`，但 Section 3.1.11 版型明確包含這些欄位。  
-- Section 4.17/4.18/4.19 交易回傳、列印明細、使用者登入回傳之欄位清單與 Section 3.1.12/3.1.13 的 600-byte 版型不一致；其中 4.18 未提供完整 600-byte 版型。  
+已由官方說明釐清：  
+- 分期退貨 Trans_Type 正確為 `04`。  
+- 金融卡退貨回傳不包含 `Cancel Debt Number` 與 `Batch_Number`。  
+- 交易回傳以 3.1.12 版型為準；列印明細回傳欄位位置參考 3.1.1；使用者登入回傳以 3.1.13 版型為準（ECR_Response_Code `0000` 成功、`0001` 失敗）。  

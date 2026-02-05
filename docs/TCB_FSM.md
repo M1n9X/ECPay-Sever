@@ -454,6 +454,152 @@ Link.Send(payload)
 5. `参考号` (Reference_No)
 6. `端末机编号` (TID)
 
+#### 1.25 600-byte Payload 构造规则（必须遵循）
+
+1. **长度固定**: DATA 必须是 600 bytes，不足用空白补满。  
+2. **填充规则**: 数字字段右靠左补 0；字符串字段左靠右补空白。  
+3. **位置规则**: `docs/TCB_RS232.md` 的位置为 1-based；写入时使用 `offset = position - 1`。  
+4. **未使用字段**: 必须填空白，不可缺字节。  
+5. **敏感字段**: 不写入日志或需脱敏。  
+
+#### 1.26 解析与构造的统一入口（建议实现方式）
+
+1. 从 `docs/tcb_layout_v36.json` 读取版型定义。  
+2. 构造 Request 时按版型字段写入，避免硬编码 offset。  
+3. 解析 Response 时按版型字段读取，并输出字段字典。  
+4. 统一由 `Protocol` 模块提供：  
+   - `Build(transType, params)`  
+   - `Parse(transType, payload)`  
+
+#### 1.27 上位机完整伪代码（含重试、超时、幂等）
+
+```text
+function startTransaction(transType, params):
+  if inProgress: return ERROR("busy")
+  payload = BuildPayload(transType, params) // 600 bytes
+  sendResult = Link.Send(payload)           // handles ACK/NAK
+  if sendResult != OK:
+    return ERROR("send failed")
+
+  start 60s timer
+  while not timeout:
+    resp = Link.Read()                      // returns 600-byte payload
+    if resp is None: continue
+    fields = ParsePayload(transType, resp)
+    key = buildDedupKey(fields)
+    if alreadyProcessed(key):
+      // always ACK at Link layer; do not double-book
+      return previousResult(key)
+    result = mapResult(fields)
+    persistResult(key, result)
+    return result
+
+  return TIMEOUT("交易逾时，请查询结果")
+```
+
+#### 1.28 交易结果映射（建议）
+
+1. `SUCCESS`: `ECR_Response_Code == 0000` 且 `Host_Response_Code` 若存在为成功。  
+2. `FAILED`: `ECR_Response_Code != 0000`。  
+3. `TIMEOUT`: 60s 内未收到 Response 或 `ECR_Response_Code == 0011/0013`。  
+
+#### 1.29 交易查询入口建议
+
+1. `TIMEOUT` 或 `0011/0013` 时，必须提供 `07` 逾时查询入口。  
+2. 查询需携带关键字段（参考 `docs/TCB_RS232.md` 的 3.1.3/4.x）。  
+3. 查询结果与原交易合并展示，避免重复交易。  
+
+#### 1.30 设备兼容性注意事项
+
+1. 严格遵守 ACK/NAK 双发，避免对方不识别单次 ACK。  
+2. 避免并发交易，串口同一时刻只能处理一笔交易。  
+3. 遇到未知字段或空字段，仍需保留 600-byte 长度。  
+
+#### 1.31 关键交易的完整字段填充模板（示例）
+
+**说明**: 以下示例只展示 Request 端必要与高频字段，其他字段必须填空白。字段位置与长度请严格依据 `docs/TCB_RS232.md`。  
+
+**Template: SALE (01)**  
+1. `Trans_Type=01`  
+2. `Host_ID`  
+3. `Invoice_No`（若要求）  
+4. `Trans_Amount`  
+5. `Only_Credit/CUP`（可选）  
+
+**Template: GET PAN (60)**  
+1. `Trans_Type=60`  
+2. `Trans_Amount`  
+3. `Start Get PAN` = `01`/`02`/`03`/`04`  
+4. `Period`（分期时）  
+
+**Template: SALE-2STAGE (62)**  
+1. `Trans_Type=62`  
+2. `Trans_Amount`  
+
+**Template: SETTLE (50)**  
+1. `Trans_Type=50`  
+2. `Host_ID`  
+
+**Template: AUTO SETTLE (51)**  
+1. `Trans_Type=51`  
+
+**Template: FISC REFUND (27)**  
+1. `Trans_Type=27`  
+2. `Host_ID=03`  
+3. `Trans_Amount`  
+4. `Reference_No`  
+
+**Template: INTELLA (36/37/38/39)**  
+1. `Trans_Type`  
+2. `Trans_Amount`（查詢除外）  
+3. `Order_Num`（退款/查詢）  
+4. `Scan_Data`（被掃）  
+
+#### 1.32 上位机 API 结构建议（示例）
+
+**Request 结构**:
+1. `transType`  
+2. `amount`  
+3. `hostId`  
+4. `invoiceNo`  
+5. `startGetPan`  
+6. `period`  
+7. `referenceNo`  
+8. `orderNum` / `scanData`  
+
+**Response 结构**:
+1. `status`  
+2. `message`  
+3. `ecrCode`  
+4. `hostCode`  
+5. `approvalNo`  
+6. `referenceNo`  
+7. `terminalId`  
+8. `rawFields`  
+
+#### 1.33 设备诊断与自检建议
+
+1. 启动时发送一笔低风险测试交易或读取设备状态（若设备支持）。  
+2. 串口打开后先清空缓冲区，避免历史残留数据干扰。  
+3. 若发生连续 3 次通信失败，提示用户检查线材与设备电源。  
+
+#### 1.34 通讯异常处理策略（建议）
+
+1. `Write` 失败：立即报错并回到 `IDLE`。  
+2. `Read` 失败：若非超时，报错并提示用户检查连线。  
+3. LRC/长度错误：回 NAKx2，触发 EDC 重送；超过上限则报错。  
+
+#### 1.35 交易结果与 UI 文案一致性
+
+1. 所有失败结果统一使用 `ECR_Response_Code` 解释，不用猜测原因。  
+2. 若 `ECR_Response_Code` 为 0000 但 `Host_Response_Code` 非成功，仍应视为失败并提示主机原因。  
+3. 逾时与拒绝必须给出“下一步动作”（如查询或改用其他方式）。  
+
+#### 1.36 版本兼容建议
+
+1. 仅以 PDF v3.6 作为权威来源，版本差异需单独列出对照表。  
+2. 若未来升级到 v3.7+，需重新生成 `tcb_layout_v36.json` 对应版本文件。  
+
 ---
 
 ### 2. Go 参考实现 (Aligned with PDF v3.6)
@@ -654,6 +800,7 @@ func BuildSaleRequest(amount int) []byte {
 
 以下為 PDF v3.6 內部不一致處，屬交易欄位與版型定義問題，與通訊 FSM 無直接衝突，但實作時需注意：
 
-- Section 4.7 分期退貨一段式流程標示 `Trans_Type ("02")`，但 Section 3.2 明確定義分期退貨為 `04`，且 Start Get PAN 亦標示分期退貨為 `04`。  
-- Section 4.16 金融卡退貨回傳欄位清單未包含 `Cancel Debt Number` 與 `Batch_Number`，但 Section 3.1.11 版型明確包含這些欄位。  
-- Section 4.17/4.18/4.19 交易回傳、列印明細、使用者登入回傳之欄位清單與 Section 3.1.12/3.1.13 的 600-byte 版型不一致；其中 4.18 未提供完整 600-byte 版型。  
+已由官方說明釐清：  
+- 分期退貨 Trans_Type 正確為 `04`。  
+- 金融卡退貨回傳不包含 `Cancel Debt Number` 與 `Batch_Number`。  
+- 交易回傳以 3.1.12 版型為準；列印明細回傳欄位位置參考 3.1.1；使用者登入回傳以 3.1.13 版型為準（ECR_Response_Code `0000` 成功、`0001` 失敗）。  
