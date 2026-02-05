@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Windows Build Script for ECPay POS
+ * Windows Build Script for TCB POS
  * 
  * Usage:
  *   npm run build:win                    # Default build (x64, production)
@@ -28,7 +28,7 @@ const projectRoot = path.join(__dirname, '..');
 const releaseDir = path.join(projectRoot, 'release');
 const isWindows = process.platform === 'win32';
 
-console.log('🔨 ECPay POS Windows Build Script');
+console.log('🔨 TCB POS Windows Build Script');
 console.log('================================\n');
 
 // Helper: remove directory cross-platform

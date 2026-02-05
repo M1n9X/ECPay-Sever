@@ -1,6 +1,6 @@
-# ECPay POS - Electron Application
+# TCB POS - Electron Application
 
-基于 Electron 封装的 ECPay POS 终端应用，集成 Go Server 和 React UI。
+基于 Electron 封装的 TCB POS 终端应用，集成 Go Server 和 React UI。
 
 ## 架构概览
 
@@ -61,7 +61,7 @@ electron-app/
 │
 ├── resources/
 │   └── bin/                     # Go Server 二进制
-│       └── ecpay-server[.exe]
+│       └── tcb-server[.exe]
 │
 ├── scripts/
 │   └── dev.js                   # 开发启动脚本
@@ -235,8 +235,8 @@ npm run dist
 
 ### Go Server 启动失败
 
-1. 检查 `resources/bin/ecpay-server` 是否存在
-2. 检查文件是否有执行权限：`chmod +x resources/bin/ecpay-server`
+1. 检查 `resources/bin/tcb-server` 是否存在
+2. 检查文件是否有执行权限：`chmod +x resources/bin/tcb-server`
 3. 查看控制台日志获取详细错误信息
 
 ### WebSocket 连接失败

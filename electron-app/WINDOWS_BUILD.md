@@ -37,7 +37,7 @@ build-windows.bat [--debug] [--arm64] [--all] [--clean]
 包含：
 - Electron 运行时（Chromium + Node.js）
 - 所有 Node.js 依赖
-- Go 服务器（ecpay-server.exe）
+- Go 服务器（tcb-server.exe）
 - 所有资源文件
 
 ## 架构支持

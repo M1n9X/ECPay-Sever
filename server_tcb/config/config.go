@@ -12,7 +12,7 @@ type Config struct {
 }
 
 func Load() *Config {
-	wsAddr := flag.String("ws", ":8990", "WebSocket server address")
+	wsAddr := flag.String("ws", ":8989", "WebSocket server address")
 	serialPort := flag.String("port", "", "Serial port (COM3, /dev/ttyUSB0, tcp://host:port)")
 	baudRate := flag.Int("baud", 115200, "Serial baud rate")
 	autoDetect := flag.Bool("autodetect", false, "Auto-detect POS device (TCB does not define ECHO)")

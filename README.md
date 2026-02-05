@@ -1,16 +1,16 @@
-# ECPay POS Server
+# TCB POS Server
 
-A WebSocket-based gateway server that bridges web applications with ECPay POS terminals via RS232 serial communication.
+A WebSocket-based gateway server that bridges web applications with TCB POS terminals via RS232 serial communication.
 
 ## Architecture
 
 ### Development Mode (Web)
 
 ```
-┌─────────────┐    WebSocket    ┌─────────────┐    TCP/RS232    ┌─────────────┐
-│   Webapp    │ ◄───:5173───►   │   Server    │ ◄───:9999───►   │  Mock POS   │
-│  (React)    │                 │    (Go)     │                 │   (Go)      │
-└─────────────┘                 └─────────────┘                 └─────────────┘
+┌─────────────┐    WebSocket    ┌──────────────┐    TCP/RS232    ┌──────────────┐
+│   Webapp    │ ◄───:5173───►   │  Server_TCB  │ ◄───:9999───►   │  Mock POS    │
+│  (React)    │                 │    (Go)      │                 │   (Go)       │
+└─────────────┘                 └──────────────┘                 └──────────────┘
 ```
 
 ### Production Mode (Electron)
@@ -42,10 +42,10 @@ A WebSocket-based gateway server that bridges web applications with ECPay POS te
 
 | Component | Directory | Port | Description |
 |-----------|-----------|------|-------------|
-| **Server** | `server/` | `:8989` | Go WebSocket server bridging webapp to POS |
-| **Mock POS** | `mock-pos/` | `:9999` | POS terminal simulator for development |
+| **Server_TCB** | `server_tcb/` | `:8989` | Go WebSocket server bridging webapp to POS |
+| **Mock POS (TCB)** | `mock-pos-tcb/` | `:9999` | POS terminal simulator for development |
 | **Webapp** | `webapp/` | `:5173` | React TypeScript frontend for POS operations |
-| **Electron App** | `electron-app/` | - | Desktop application bundling Server + Webapp |
+| **Electron App** | `electron-app/` | - | Desktop application bundling Server_TCB + Webapp |
 
 ## Quick Start
 
@@ -53,10 +53,10 @@ A WebSocket-based gateway server that bridges web applications with ECPay POS te
 
 ```bash
 # 1. Start Mock POS (in terminal 1)
-cd mock-pos && go run main.go
+cd mock-pos-tcb && go run main.go
 
-# 2. Start Server (in terminal 2)
-cd server && go run main.go
+# 2. Start Server_TCB (in terminal 2)
+cd server_tcb && go run main.go
 
 # 3. Start Webapp (in terminal 3)
 cd webapp && npm install && npm run dev
@@ -81,12 +81,16 @@ npm run dev
 
 ```bash
 # Connect to real POS terminal via serial port
-cd server && go run main.go -port /dev/ttyUSB0
+cd server_tcb && go run main.go -port /dev/ttyUSB0
 ```
 
 ## Protocol Specification
 
-This project implements the [ECPay POS RS232 Protocol](docs/RS232.md).
+This project implements the TCB POS RS232 Protocol (Ver 3.6).
+
+- `docs/TCB/TCB_RS232.md`
+- `docs/TCB/TCB_FSM.md`
+- `docs/TCB/tcb_layout_v36.json`
 
 ### Frame Structure (603 bytes)
 
@@ -99,25 +103,15 @@ This project implements the [ECPay POS RS232 Protocol](docs/RS232.md).
 
 ### Supported Transactions
 
-| Type | Code | Description |
-|------|------|-------------|
+| Command | Code | Description |
+|---------|------|-------------|
 | **SALE** | `01` | Credit card sale |
 | **REFUND** | `02` | Refund transaction |
 | **SETTLEMENT** | `50` | Daily batch settlement |
-| **ECHO** | `80` | Connection test |
-
-### Key Data Fields
-
-| Offset | Length | Field |
-|--------|--------|-------|
-| 0-1 | 2 | Trans Type |
-| 2-3 | 2 | Host ID |
-| 31-42 | 12 | Amount (no decimal) |
-| 55-60 | 6 | Approval Number |
-| 61-64 | 4 | Response Code |
-| 88-107 | 20 | Order Number |
-| 492-505 | 14 | POS Request Time |
-| 506-545 | 40 | SHA-1 Hash |
+| **GETPAN** | `60` | Read card (2-step) |
+| **COMPLETE** | `62` | Complete transaction (2-step) |
+| **TERMINATE** | `70` | Cancel 2-step |
+| **INQUIRY** | `07` | Timeout inquiry |
 
 ## API Reference
 
@@ -131,7 +125,11 @@ This project implements the [ECPay POS RS232 Protocol](docs/RS232.md).
 {
   "command": "SALE",
   "amount": "100",
-  "order_no": ""
+  "host_id": "02",
+  "trans_type": "01",
+  "fields": {
+    "Invoice_No": "000001"
+  }
 }
 ```
 
@@ -145,8 +143,7 @@ This project implements the [ECPay POS RS232 Protocol](docs/RS232.md).
     "TransType": "01",
     "Amount": "000000000100",
     "ApprovalNo": "123456",
-    "OrderNo": "MOCK20260116095137",
-    "CardNo": "4311****1234",
+    "OrderNo": "000001",
     "RespCode": "0000"
   }
 }
@@ -160,33 +157,30 @@ This project implements the [ECPay POS RS232 Protocol](docs/RS232.md).
 | `success` | Transaction approved |
 | `error` | Transaction failed |
 
-### Response Codes
+### Response Codes (ECR)
 
 | Code | Meaning |
 |------|---------|
 | `0000` | Approved |
 | `0001` | Declined |
-| `0002` | Call Bank |
-| `0003` | Communication Error |
+| `0011` | Timeout (use inquiry) |
+| `0013` | Timeout (use inquiry) |
 
 ## Project Structure
 
 ```
 ECPay-Server/
 ├── docs/
-│   ├── RS232.md              # Protocol specification
-│   ├── architecture.md       # System architecture
-│   ├── design.md             # Design decisions
-│   └── hybrid.md             # Hybrid architecture design
-├── server/
+│   └── TCB/                 # TCB protocol specification & architecture
+├── server_tcb/
 │   ├── main.go               # Entry point
 │   ├── api/                  # WebSocket handlers
 │   ├── config/               # Configuration
 │   ├── driver/               # Port abstraction (Serial/TCP)
 │   ├── logger/               # Logging
-│   └── protocol/             # ECPay packet building/parsing
-├── mock-pos/
-│   └── main.go               # Mock POS simulator
+│   └── protocol/             # TCB packet building/parsing
+├── mock-pos-tcb/
+│   └── main.go               # Mock POS simulator (TCB)
 ├── webapp/
 │   ├── src/
 │   │   ├── App.tsx           # Main application
@@ -212,10 +206,10 @@ ECPay-Server/
 
 ```bash
 # Build server
-cd server && go build -o ecpay-server
+cd server_tcb && go build -o tcb-server
 
 # Build mock-pos
-cd mock-pos && go build -o mock-pos
+cd mock-pos-tcb && go build -o mock-pos-tcb
 
 # Build webapp
 cd webapp && npm run build
@@ -225,8 +219,10 @@ cd webapp && npm run build
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-port` | `COM3` | Serial port name |
-| `-mock` | `false` | Enable mock mode (TCP instead of serial) |
+| `-ws` | `:8989` | WebSocket server address |
+| `-port` | `` | Serial port name (COM3, /dev/ttyUSB0, tcp://host:port) |
+| `-baud` | `115200` | Serial baud rate |
+| `-autodetect` | `false` | Auto-detect POS device (not recommended for TCB) |
 
 ### Serial Port Settings
 

@@ -1,14 +1,16 @@
 package api
 
 import (
-	"tcb-server/driver"
-	"tcb-server/protocol"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
+
+	"tcb-server/driver"
+	"tcb-server/protocol"
 
 	"github.com/gorilla/websocket"
 )
@@ -18,11 +20,12 @@ var upgrader = websocket.Upgrader{
 }
 
 type WebRequest struct {
-	Command  string            `json:"command"` // "SALE", "REFUND", "SETTLEMENT", "GETPAN", "COMPLETE", "TERMINATE", "INQUIRY", "TRANSACT", "STATUS", "ABORT", "RECONNECT"
-	Amount  string `json:"amount"`
-	HostID  string `json:"host_id"`
-	TransType string `json:"trans_type"`
-	Fields  map[string]string `json:"fields"`
+	Command   string            `json:"command"` // "SALE", "REFUND", "SETTLEMENT", "GETPAN", "COMPLETE", "TERMINATE", "INQUIRY", "TRANSACT", "STATUS", "ABORT", "RECONNECT"
+	Amount    string            `json:"amount"`
+	OrderNo   string            `json:"order_no"`
+	HostID    string            `json:"host_id"`
+	TransType string            `json:"trans_type"`
+	Fields    map[string]string `json:"fields"`
 }
 
 type WebResponse struct {
@@ -170,8 +173,8 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 				time.Sleep(500 * time.Millisecond)
 				os.Exit(0) // Exit, expecting process manager to restart
 			}()
-	case "SALE", "REFUND", "SETTLEMENT", "GETPAN", "COMPLETE", "TERMINATE", "INQUIRY", "TRANSACT":
-		go h.handleTransaction(conn, req)
+		case "SALE", "REFUND", "SETTLEMENT", "GETPAN", "COMPLETE", "TERMINATE", "INQUIRY", "TRANSACT":
+			go h.handleTransaction(conn, req)
 		default:
 			h.sendControl(conn, "error", "Unknown Command", nil)
 		}
@@ -214,6 +217,20 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 	fields := map[string]string{}
 	for k, v := range req.Fields {
 		fields[k] = v
+	}
+	if req.OrderNo != "" {
+		if _, ok := fields["Invoice_No"]; !ok {
+			fields["Invoice_No"] = req.OrderNo
+		}
+		if _, ok := fields["Reference_No"]; !ok {
+			fields["Reference_No"] = req.OrderNo
+		}
+		if _, ok := fields["Order_No"]; !ok {
+			fields["Order_No"] = req.OrderNo
+		}
+		if _, ok := fields["EC_Order_No"]; !ok {
+			fields["EC_Order_No"] = req.OrderNo
+		}
 	}
 
 	transType := req.TransType
@@ -266,15 +283,72 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 	// Execute transaction
 	result, err := h.Manager.ExecuteTransaction(tcbReq)
 	if err != nil {
-		h.sendTransaction(conn, "error", err.Error(), result)
+		h.sendTransaction(conn, "error", err.Error(), normalizeResponse(result))
 		return
 	}
 
 	// Success
-	h.sendTransaction(conn, "success", "Transaction Approved", result)
+	h.sendTransaction(conn, "success", "Transaction Approved", normalizeResponse(result))
 }
 
 // Close stops the handler
 func (h *Handler) Close() {
 	close(h.stopBroadcast)
+}
+
+func normalizeResponse(raw map[string]string) map[string]string {
+	if raw == nil {
+		return nil
+	}
+	data := make(map[string]string, len(raw)+8)
+	for k, v := range raw {
+		data[k] = v
+	}
+
+	// Common aliases for webapp compatibility
+	addIfEmpty := func(key, val string) {
+		if key == "" || val == "" {
+			return
+		}
+		if _, ok := data[key]; !ok {
+			data[key] = val
+		}
+	}
+
+	transType := pickFirst(raw, []string{"Trans_Type", "TransType"})
+	amount := pickFirst(raw, []string{"Trans_Amount", "Amount", "Sale_Amount", "Refund_Amount"})
+	approval := pickFirst(raw, []string{"Approval_No"})
+	orderNo := pickFirst(raw, []string{"Reference_No", "Invoice_No", "Order_No", "EC_Order_No"})
+	cardNo := pickFirst(raw, []string{"Card_No", "CardAccount"})
+	respCode := pickFirst(raw, []string{"ECR_Response_Code", "TCB_ECR_Response_Code", "FISC_ECR_Response_Code", "NP_ECR_Response_Code", "INST_ECR_Response_Code", "AE_ECR_Response_Code"})
+	if respCode == "" {
+		respCode = pickFirstContains(raw, "ECR_Response_Code")
+	}
+
+	addIfEmpty("TransType", transType)
+	addIfEmpty("Amount", amount)
+	addIfEmpty("ApprovalNo", approval)
+	addIfEmpty("OrderNo", orderNo)
+	addIfEmpty("CardNo", cardNo)
+	addIfEmpty("RespCode", respCode)
+
+	return data
+}
+
+func pickFirst(raw map[string]string, keys []string) string {
+	for _, k := range keys {
+		if v := strings.TrimSpace(raw[k]); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func pickFirstContains(raw map[string]string, needle string) string {
+	for k, v := range raw {
+		if strings.Contains(k, needle) && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }

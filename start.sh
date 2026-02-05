@@ -1,11 +1,11 @@
 #!/bin/bash
-# ECPay POS System - One-Click Start Script
+# TCB POS System - One-Click Start Script
 #
 # Architecture:
-#   Mock POS (TCP:9999) <---> Server (auto-detect) <---> Webapp
+#   Mock POS (TCP:9999) <---> Server_TCB <---> Webapp
 #
-# The Server auto-detects Mock POS via ECHO handshake on tcp://localhost:9999
-# In production, Server auto-detects real POS on COM ports
+# The Server_TCB connects to Mock POS via tcp://localhost:9999 (no ECHO handshake)
+# In production, Server_TCB connects to real POS on COM ports
 
 set -e
 
@@ -15,13 +15,13 @@ LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
 
 echo "=========================================="
-echo "  ECPay POS System - Starting Services"
+echo "  TCB POS System - Starting Services"
 echo "=========================================="
 
 # Kill any existing processes
 echo "Cleaning up existing processes..."
-pkill -f "mock-pos" 2>/dev/null || true
-pkill -f "ecpay-server" 2>/dev/null || true
+pkill -f "mock-pos-tcb" 2>/dev/null || true
+pkill -f "tcb-server" 2>/dev/null || true
 pkill -f "run_dev.sh" 2>/dev/null || true
 lsof -ti:9999 | xargs kill -9 2>/dev/null || true
 lsof -ti:8989 | xargs kill -9 2>/dev/null || true
@@ -30,9 +30,13 @@ sleep 1
 
 # 1. Start Mock POS
 echo ""
-echo "[1/3] Starting Mock POS (TCP :9999)..."
-cd "$SCRIPT_DIR/mock-pos"
-./mock-pos > "$LOG_DIR/mock-pos.log" 2>&1 &
+echo "[1/3] Starting Mock POS (TCB, TCP :9999)..."
+cd "$SCRIPT_DIR/mock-pos-tcb"
+if [ ! -f "./mock-pos-tcb" ]; then
+    echo "      Building mock-pos-tcb..."
+    go build -o mock-pos-tcb
+fi
+./mock-pos-tcb > "$LOG_DIR/mock-pos.log" 2>&1 &
 MOCK_PID=$!
 echo $MOCK_PID > "$LOG_DIR/mock-pos.pid"
 echo "      Mock POS PID: $MOCK_PID"
@@ -45,22 +49,22 @@ if ! kill -0 $MOCK_PID 2>/dev/null; then
 fi
 echo "      ✓ Mock POS started"
 
-# 2. Start Server (auto-detects Mock POS via ECHO handshake)
-echo "[2/3] Starting Server (auto-detect mode)..."
-cd "$SCRIPT_DIR/server"
-./run_dev.sh > "$LOG_DIR/server.log" 2>&1 &
+# 2. Start Server_TCB
+echo "[2/3] Starting Server_TCB..."
+cd "$SCRIPT_DIR/server_tcb"
+./run_dev.sh -port tcp://localhost:9999 > "$LOG_DIR/server.log" 2>&1 &
 SERVER_PID=$!
 echo $SERVER_PID > "$LOG_DIR/server.pid"
 echo "      Server Runner PID: $SERVER_PID"
 sleep 3
 
 if ! kill -0 $SERVER_PID 2>/dev/null; then
-    echo "      ✗ ERROR: Server failed to start"
+    echo "      ✗ ERROR: Server_TCB failed to start"
     cat "$LOG_DIR/server.log" 2>/dev/null | tail -10
     kill $MOCK_PID 2>/dev/null || true
     exit 1
 fi
-echo "      ✓ Server started"
+echo "      ✓ Server_TCB started"
 
 # 3. Start Webapp
 echo "[3/3] Starting Webapp (port 5173)..."

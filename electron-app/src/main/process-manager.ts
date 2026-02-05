@@ -50,10 +50,10 @@ export class ProcessManager extends EventEmitter {
    */
   getServerPath(): string {
     const ext = process.platform === 'win32' ? '.exe' : '';
-    const binaryName = `ecpay-server${ext}`;
+    const binaryName = `tcb-server${ext}`;
 
     if (app.isPackaged) {
-      // Production: resources/bin/ecpay-server
+      // Production: resources/bin/tcb-server
       return path.join(process.resourcesPath, 'bin', binaryName);
     }
 
@@ -61,7 +61,7 @@ export class ProcessManager extends EventEmitter {
     const candidates = [
       path.join(__dirname, '../../resources/bin', binaryName),
       path.join(__dirname, '../../../resources/bin', binaryName),
-      path.join(__dirname, '../../../server', binaryName),
+      path.join(__dirname, '../../../server_tcb', binaryName),
     ];
 
     for (const candidate of candidates) {

@@ -28,7 +28,7 @@
 │                                                                          │
 │  ┌──────────┐      TCP :9999      ┌──────────┐   WebSocket  ┌─────────┐ │
 │  │ Mock POS │ ◄─────────────────► │ server   │ ◄──────────► │ Webapp  │ │
-│  │  (Go)    │   tcp://localhost   │  _tcb    │   :8990/ws   │         │ │
+│  │  (Go)    │   tcp://localhost   │  _tcb    │   :8989/ws   │         │ │
 │  └──────────┘                     └──────────┘              └─────────┘ │
 │                                                                          │
 │  * Mock POS: 使用 mock-pos-tcb（tcp://localhost:9999）                │
@@ -45,7 +45,7 @@
 │                                                                          │
 │  ┌──────────┐   RS232 Serial      ┌──────────┐   WebSocket  ┌─────────┐ │
 │  │ TCB POS  │ ◄─────────────────► │ server   │ ◄──────────► │ Webapp  │ │
-│  │ Terminal │   COMx / ttyUSB0    │  _tcb    │   :8990/ws   │         │ │
+│  │ Terminal │   COMx / ttyUSB0    │  _tcb    │   :8989/ws   │         │ │
 │  └──────────┘   115200 bps 8N1    └──────────┘              └─────────┘ │
 │                                                                          │
 │  * TCB 规范无 ECHO 握手，建议通过配置指定串口                          │
