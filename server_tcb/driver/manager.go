@@ -14,10 +14,12 @@ import (
 )
 
 const (
-	AckTimeout       = 1 * time.Second
-	ResponseTimeout  = 60 * time.Second
-	MaxRetries       = 3
-	ResponseMaxRetry = 3
+	AckTimeout         = 1 * time.Second
+	ResponseTimeout    = 60 * time.Second
+	MaxRetries         = 3
+	ResponseMaxRetry   = 3
+	DuplicateAckWindow = 5 * time.Second
+	DuplicateAckIdle   = 300 * time.Millisecond
 )
 
 // SerialManager manages the serial port connection and transaction execution
@@ -206,6 +208,9 @@ func (sm *SerialManager) ExecuteTransaction(req protocol.TCBRequest) (map[string
 		return nil, err
 	}
 
+	// Drain any duplicate responses for a short window (EDC resend behavior)
+	sm.drainDuplicateResponses(ctx, cancelChan)
+
 	// Evaluate response code (if present)
 	if code, ok := result["ECR_Response_Code"]; ok && code != "" && code != "0000" {
 		errMsg := fmt.Sprintf("transaction declined: %s", code)
@@ -368,6 +373,61 @@ func tryExtractPacket(data []byte) ([]byte, bool) {
 
 func (sm *SerialManager) writeAck(b byte) {
 	_, _ = sm.Port.Write([]byte{b, b})
+}
+
+func (sm *SerialManager) drainDuplicateResponses(ctx context.Context, cancelChan <-chan struct{}) {
+	deadline := time.Now().Add(DuplicateAckWindow)
+	idleDeadline := time.Now().Add(DuplicateAckIdle)
+	buf := make([]byte, 1024)
+	respBuf := new(bytes.Buffer)
+
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-cancelChan:
+			return
+		default:
+		}
+
+		n, err := sm.Port.Read(buf)
+		if n > 0 {
+			respBuf.Write(buf[:n])
+			idleDeadline = time.Now().Add(DuplicateAckIdle)
+		}
+
+		for {
+			data := respBuf.Bytes()
+			if len(data) == 0 {
+				break
+			}
+			idx := bytes.IndexByte(data, protocol.STX)
+			if idx < 0 {
+				respBuf.Reset()
+				break
+			}
+			if idx > 0 {
+				respBuf.Next(idx)
+				data = respBuf.Bytes()
+			}
+			if len(data) < protocol.FrameLen {
+				break
+			}
+			pkt := append([]byte{}, data[:protocol.FrameLen]...)
+			respBuf.Next(protocol.FrameLen)
+			if protocol.ValidatePacket(pkt) {
+				sm.writeAck(protocol.ACK)
+			}
+		}
+
+		if err != nil && !isTimeoutError(err) {
+			logger.Warn("Read error during duplicate drain: %v", err)
+		}
+		if time.Now().After(idleDeadline) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // handleWriteError handles write errors and marks connection as lost
