@@ -166,6 +166,12 @@ This project implements the TCB POS RS232 Protocol (Ver 3.6).
 | `0011` | Timeout (use inquiry) |
 | `0013` | Timeout (use inquiry) |
 
+### Idempotency (Business Layer)
+
+Server_TCB maintains a short-lived idempotency cache (5 minutes).  
+If the same request (same key fields) is retried, the server returns the cached result to avoid duplicate charging.  
+Recommended to pass a stable `order_no` for best results.
+
 ## Project Structure
 
 ```

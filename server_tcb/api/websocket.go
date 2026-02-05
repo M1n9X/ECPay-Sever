@@ -46,6 +46,10 @@ type Handler struct {
 	// Status broadcast ticker
 	broadcastTicker *time.Ticker
 	stopBroadcast   chan struct{}
+
+	// Idempotency cache (business layer)
+	idemMu    sync.Mutex
+	idemCache map[string]idemRecord
 }
 
 func NewHandler(manager *driver.SerialManager) *Handler {
@@ -53,6 +57,7 @@ func NewHandler(manager *driver.SerialManager) *Handler {
 		Manager:       manager,
 		clients:       make(map[*websocket.Conn]bool),
 		stopBroadcast: make(chan struct{}),
+		idemCache:     make(map[string]idemRecord),
 	}
 
 	// Set up state change callback
@@ -206,13 +211,6 @@ func (h *Handler) sendStatus(conn *websocket.Conn, message string, data interfac
 }
 
 func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
-	// Try to lock for transaction
-	if !h.mu.TryLock() {
-		h.sendTransaction(conn, "error", "POS is busy", nil)
-		return
-	}
-	defer h.mu.Unlock()
-
 	// Build Protocol Request
 	fields := map[string]string{}
 	for k, v := range req.Fields {
@@ -275,6 +273,31 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 		return
 	}
 
+	// Idempotency check (business layer)
+	idemKey := h.idemKey(req, transType, fields)
+	if idemKey != "" {
+		if rec, ok := h.idemGet(idemKey); ok {
+			h.replyIdem(conn, rec)
+			return
+		}
+	}
+
+	// Try to lock for transaction
+	if !h.mu.TryLock() {
+		h.sendTransaction(conn, "error", "POS is busy", nil)
+		return
+	}
+	defer h.mu.Unlock()
+
+	// Re-check idempotency after acquiring lock
+	if idemKey != "" {
+		if rec, ok := h.idemGet(idemKey); ok {
+			h.replyIdem(conn, rec)
+			return
+		}
+		h.idemSetProcessing(idemKey)
+	}
+
 	tcbReq := protocol.TCBRequest{
 		TransType: transType,
 		Fields:    fields,
@@ -283,17 +306,126 @@ func (h *Handler) handleTransaction(conn *websocket.Conn, req WebRequest) {
 	// Execute transaction
 	result, err := h.Manager.ExecuteTransaction(tcbReq)
 	if err != nil {
-		h.sendTransaction(conn, "error", err.Error(), normalizeResponse(result))
+		payload := normalizeResponse(result)
+		h.sendTransaction(conn, "error", err.Error(), payload)
+		if idemKey != "" {
+			h.idemSetResult(idemKey, "error", err.Error(), payload)
+		}
 		return
 	}
 
 	// Success
-	h.sendTransaction(conn, "success", "Transaction Approved", normalizeResponse(result))
+	payload := normalizeResponse(result)
+	h.sendTransaction(conn, "success", "Transaction Approved", payload)
+	if idemKey != "" {
+		h.idemSetResult(idemKey, "success", "Transaction Approved", payload)
+	}
 }
 
 // Close stops the handler
 func (h *Handler) Close() {
 	close(h.stopBroadcast)
+}
+
+type idemRecord struct {
+	status    string
+	message   string
+	data      map[string]string
+	updatedAt time.Time
+}
+
+const idemTTL = 5 * time.Minute
+
+func (h *Handler) idemKey(req WebRequest, transType string, fields map[string]string) string {
+	parts := []string{
+		strings.TrimSpace(req.Command),
+		strings.TrimSpace(transType),
+		strings.TrimSpace(req.HostID),
+		strings.TrimSpace(req.Amount),
+		strings.TrimSpace(req.OrderNo),
+		strings.TrimSpace(fields["Invoice_No"]),
+		strings.TrimSpace(fields["Reference_No"]),
+		strings.TrimSpace(fields["Order_No"]),
+		strings.TrimSpace(fields["EC_Order_No"]),
+	}
+
+	// Skip if no stable identifiers
+	hasKey := false
+	for _, p := range parts {
+		if p != "" {
+			hasKey = true
+			break
+		}
+	}
+	if !hasKey {
+		return ""
+	}
+
+	return strings.Join(parts, "|")
+}
+
+func (h *Handler) idemGet(key string) (idemRecord, bool) {
+	h.idemMu.Lock()
+	defer h.idemMu.Unlock()
+	h.idemCleanupLocked()
+
+	rec, ok := h.idemCache[key]
+	if !ok {
+		return idemRecord{}, false
+	}
+	if time.Since(rec.updatedAt) > idemTTL {
+		delete(h.idemCache, key)
+		return idemRecord{}, false
+	}
+	return rec, true
+}
+
+func (h *Handler) idemSetProcessing(key string) {
+	h.idemMu.Lock()
+	defer h.idemMu.Unlock()
+	h.idemCleanupLocked()
+	h.idemCache[key] = idemRecord{
+		status:    "processing",
+		message:   "Duplicate transaction in progress",
+		updatedAt: time.Now(),
+	}
+}
+
+func (h *Handler) idemSetResult(key, status, message string, data map[string]string) {
+	h.idemMu.Lock()
+	defer h.idemMu.Unlock()
+	h.idemCleanupLocked()
+	h.idemCache[key] = idemRecord{
+		status:    status,
+		message:   message,
+		data:      data,
+		updatedAt: time.Now(),
+	}
+}
+
+func (h *Handler) replyIdem(conn *websocket.Conn, rec idemRecord) {
+	switch rec.status {
+	case "success":
+		h.sendTransaction(conn, "success", rec.message, rec.data)
+	case "error":
+		h.sendTransaction(conn, "error", rec.message, rec.data)
+	case "processing":
+		h.sendTransaction(conn, "processing", rec.message, rec.data)
+	default:
+		h.sendTransaction(conn, "processing", "Duplicate transaction in progress", rec.data)
+	}
+}
+
+func (h *Handler) idemCleanupLocked() {
+	if len(h.idemCache) == 0 {
+		return
+	}
+	now := time.Now()
+	for k, v := range h.idemCache {
+		if now.Sub(v.updatedAt) > idemTTL {
+			delete(h.idemCache, k)
+		}
+	}
 }
 
 func normalizeResponse(raw map[string]string) map[string]string {

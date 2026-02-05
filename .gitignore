@@ -17,6 +17,9 @@ go.work.sum
 # Go binaries
 server/ecpay-server
 mock-pos/mock-pos
+server_tcb/tcb-server
+server_tcb/ecpay-server
+mock-pos-tcb/mock-pos-tcb
 
 # ===================
 # Node.js
@@ -33,6 +36,7 @@ electron-app/dist/
 electron-app/build/
 electron-app/resources/bin/*.exe
 electron-app/resources/bin/ecpay-server
+electron-app/resources/bin/tcb-server
 electron-app/resources/bin/log/
 
 # ===================
@@ -40,6 +44,7 @@ electron-app/resources/bin/log/
 # ===================
 logs/
 server/log/
+server_tcb/log/
 *.log
 *.pid
 

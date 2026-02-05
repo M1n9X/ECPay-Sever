@@ -49,7 +49,7 @@
 | 多态 payload 解析 | 已实现 | `tcb_layout_v36.json` 驱动 |
 | 单交易串行 | 已实现 | WebSocket handler mutex |
 | 重送/重复包处理 | 已实现 | 5s 视窗内 ACK 重复 Response |
-| 幂等/去重（业务层） | 部分实现 | 当前只处理链路重复包，业务侧建议做二次幂等 |
+| 幂等/去重（业务层） | 已实现 | WebSocket 层提供短期幂等缓存（见 5.1） |
 | 日志 | 已实现 | `logger` 模块输出与轮转 |
 
 结论：**架构关键能力已落地，少数“业务幂等”仍需上位机补充。**
@@ -63,9 +63,25 @@
 
 ## 5. 已知约束与建议
 
+### 5.1 业务幂等（WebSocket 层）
+
+已加入短期幂等缓存（TTL 5 分钟），基于以下字段组合生成 key：  
+`command + trans_type + host_id + amount + order_no + Invoice_No + Reference_No + Order_No + EC_Order_No`。  
+
+行为：
+1. **重复请求（成功/失败）**：直接返回缓存结果，避免二次入账。  
+2. **重复请求（处理中）**：返回 `processing`，提示“Duplicate transaction in progress”。  
+3. **无稳定 key**：不启用幂等。  
+
+建议：
+- 业务侧仍应做订单级幂等（例如使用商户订单号作为统一 key）。  
+
+### 5.2 已知约束与建议
+
 1. **主机成功码**：目前认为 `Host_Response_Code` 为 `00/0000` 才成功，如银行另有特殊成功码需扩展。  
-2. **业务幂等**：服务器层只保证“同一交易链路内的重复包不会触发重复入账”；业务系统仍需做订单级幂等控制。  
-3. **RESTART 指令**：`RESTART` 会直接 `os.Exit(0)`，生产若无守护进程应禁用。  
+2. **RESTART 指令**：`RESTART` 会直接 `os.Exit(0)`，生产若无守护进程应禁用。  
+
+> 参考：旧版 ECPay Server 仅判断 `RespCode == 0000`，未包含主机成功码逻辑，因此不能直接沿用，仅能作为基础参考。
 
 ## 6. 结论
 

@@ -139,6 +139,7 @@
 
 - 禁止记录明文卡号
 - 交易结果去重（建议使用 Trans_Type + Invoice_No + Reference_No + STAN + Amount）
+- Server_TCB 提供短期幂等缓存（5 分钟），重复请求直接返回缓存结果
 - 重复 Response 只回 ACK，不重复入账
 
 ---
