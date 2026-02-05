@@ -464,7 +464,7 @@ Link.Send(payload)
 
 #### 1.26 解析与构造的统一入口（建议实现方式）
 
-1. 从 `docs/tcb_layout_v36.json` 读取版型定义。  
+1. 从 `docs/TCB/tcb_layout_v36.json` 读取版型定义。  
 2. 构造 Request 时按版型字段写入，避免硬编码 offset。  
 3. 解析 Response 时按版型字段读取，并输出字段字典。  
 4. 统一由 `Protocol` 模块提供：  
