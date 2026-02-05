@@ -148,7 +148,15 @@ func (sm *SerialManager) ExecuteTransaction(req protocol.TCBRequest) (map[string
 		return nil, errors.New("POS device not connected")
 	}
 
-	if err := sm.State.StartTransaction(req.TransType, ""); err != nil {
+	amount := ""
+	if req.Fields != nil {
+		if v := strings.TrimSpace(req.Fields["Trans_Amount"]); v != "" {
+			amount = v
+		} else if v := strings.TrimSpace(req.Fields["Amount"]); v != "" {
+			amount = v
+		}
+	}
+	if err := sm.State.StartTransaction(req.TransType, amount); err != nil {
 		logger.Error("Cannot start transaction: %v", err)
 		return nil, err
 	}
@@ -211,11 +219,16 @@ func (sm *SerialManager) ExecuteTransaction(req protocol.TCBRequest) (map[string
 	// Drain any duplicate responses for a short window (EDC resend behavior)
 	sm.drainDuplicateResponses(ctx, cancelChan)
 
-	// Evaluate response code (if present)
-	if code, ok := result["ECR_Response_Code"]; ok && code != "" && code != "0000" {
-		errMsg := fmt.Sprintf("transaction declined: %s", code)
-		sm.State.TransitionToError(errMsg)
-		return result, errors.New(errMsg)
+	// Evaluate response codes (ECR + Host)
+	switch eval := evaluateResponse(result); eval.kind {
+	case evalSuccess:
+		// ok
+	case evalTimeout:
+		sm.State.TransitionToTimeout()
+		return result, errors.New(eval.message)
+	case evalDeclined:
+		sm.State.TransitionToError(eval.message)
+		return result, errors.New(eval.message)
 	}
 
 	sm.State.TransitionTo(StateSuccess)
@@ -457,4 +470,75 @@ func isTimeoutError(err error) bool {
 	}
 	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "timed out")
+}
+
+type evalKind string
+
+const (
+	evalSuccess  evalKind = "success"
+	evalDeclined evalKind = "declined"
+	evalTimeout  evalKind = "timeout"
+)
+
+type evalResult struct {
+	kind    evalKind
+	message string
+}
+
+func evaluateResponse(result map[string]string) evalResult {
+	ecrCode := pickEcrCode(result)
+	hostCode := pickHostCode(result)
+
+	if ecrCode != "" {
+		if ecrCode == "0011" || ecrCode == "0013" {
+			return evalResult{
+				kind:    evalTimeout,
+				message: fmt.Sprintf("transaction timeout (ECR_Response_Code=%s)", ecrCode),
+			}
+		}
+		if ecrCode != "0000" {
+			return evalResult{
+				kind:    evalDeclined,
+				message: fmt.Sprintf("transaction declined (ECR_Response_Code=%s)", ecrCode),
+			}
+		}
+	}
+
+	if hostCode != "" && !isHostSuccess(hostCode) {
+		return evalResult{
+			kind:    evalDeclined,
+			message: fmt.Sprintf("transaction declined (Host_Response_Code=%s)", hostCode),
+		}
+	}
+
+	return evalResult{kind: evalSuccess}
+}
+
+func pickEcrCode(result map[string]string) string {
+	if v := strings.TrimSpace(result["ECR_Response_Code"]); v != "" {
+		return v
+	}
+	for k, v := range result {
+		if strings.Contains(k, "ECR_Response_Code") && !strings.Contains(k, "ESC_Response_Code") {
+			if code := strings.TrimSpace(v); code != "" {
+				return code
+			}
+		}
+	}
+	return ""
+}
+
+func pickHostCode(result map[string]string) string {
+	if v := strings.TrimSpace(result["Host_Response_Code"]); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(result["Host_Resp_Code"]); v != "" {
+		return v
+	}
+	return ""
+}
+
+func isHostSuccess(code string) bool {
+	code = strings.TrimSpace(code)
+	return code == "" || code == "00" || code == "0000"
 }
