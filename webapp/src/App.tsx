@@ -49,7 +49,7 @@ function App() {
   const { orders, addOrder, markRefunded } = useOrders();
 
   // Track processed transactions to avoid duplicates
-  const processedApprovalRef = useRef<string | null>(null);
+  const processedTxRef = useRef<string | null>(null);
 
   // POS callbacks
   const posCallbacks: POSCallbacks = useMemo(
@@ -88,11 +88,23 @@ function App() {
   // Handle order saving on success
   useEffect(() => {
     if (state.appState === "SUCCESS" && state.lastResult) {
-      const currentApproval = state.lastResult.ApprovalNo ?? null;
-      if (processedApprovalRef.current === currentApproval) {
+      const txKey = [
+        state.lastResult.TransType,
+        state.lastResult.Amount,
+        state.lastResult.ApprovalNo,
+        state.lastResult.OrderNo,
+        state.lastResult.MerchantOrderNo,
+        state.lastResult.InvoiceNo,
+        state.lastResult.ReferenceNo,
+        state.lastResult.CardNo,
+      ]
+        .map((v) => v ?? "")
+        .join("|");
+
+      if (processedTxRef.current === txKey) {
         return;
       }
-      processedApprovalRef.current = currentApproval;
+      processedTxRef.current = txKey;
 
       const orderData = {
         type: (state.lastResult.TransType === "01" ? "SALE" : "REFUND") as
@@ -159,7 +171,6 @@ function App() {
 
   const handleDismiss = useCallback(() => {
     dismiss();
-    processedApprovalRef.current = null;
   }, [dismiss]);
 
   // Derived values for display
