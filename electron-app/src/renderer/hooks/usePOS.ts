@@ -21,6 +21,9 @@ export interface POSResponse {
     ApprovalNo?: string;
     MerchantID?: string;
     OrderNo?: string;
+    MerchantOrderNo?: string;
+    Invoice_No?: string;
+    Reference_No?: string;
     CardNo?: string;
     RespCode?: string;
     state?: string;
@@ -63,6 +66,7 @@ export function usePOS(callbacks: POSCallbacks) {
   const callbacksRef = useRef(callbacks);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectRef = useRef<() => void>(() => {});
 
   // Keep callbacks ref updated
   useEffect(() => {
@@ -95,11 +99,16 @@ export function usePOS(callbacks: POSCallbacks) {
 
       case 'success':
         if (resp.command_type === 'transaction') {
+          const merchantOrderNo = resp.data?.MerchantOrderNo;
+          const orderNo = merchantOrderNo || resp.data?.OrderNo;
           callbacksRef.current.onTransactionSuccess({
             TransType: resp.data?.TransType,
             Amount: resp.data?.Amount,
             ApprovalNo: resp.data?.ApprovalNo,
-            OrderNo: resp.data?.OrderNo,
+            OrderNo: orderNo,
+            MerchantOrderNo: merchantOrderNo,
+            InvoiceNo: resp.data?.Invoice_No,
+            ReferenceNo: resp.data?.Reference_No,
             CardNo: resp.data?.CardNo,
             RespCode: resp.data?.RespCode,
           });
@@ -108,14 +117,22 @@ export function usePOS(callbacks: POSCallbacks) {
 
       case 'error':
         if (resp.command_type === 'transaction') {
-          callbacksRef.current.onTransactionError(resp.message, resp.data ? {
-            TransType: resp.data?.TransType,
-            Amount: resp.data?.Amount,
-            ApprovalNo: resp.data?.ApprovalNo,
-            OrderNo: resp.data?.OrderNo,
-            CardNo: resp.data?.CardNo,
-            RespCode: resp.data?.RespCode,
-          } : undefined);
+          const merchantOrderNo = resp.data?.MerchantOrderNo;
+          const orderNo = merchantOrderNo || resp.data?.OrderNo;
+          const result: TransactionResult = resp.data
+            ? {
+                TransType: resp.data?.TransType,
+                Amount: resp.data?.Amount,
+                ApprovalNo: resp.data?.ApprovalNo,
+                OrderNo: orderNo,
+                MerchantOrderNo: merchantOrderNo,
+                InvoiceNo: resp.data?.Invoice_No,
+                ReferenceNo: resp.data?.Reference_No,
+                CardNo: resp.data?.CardNo,
+                RespCode: resp.data?.RespCode,
+              }
+            : {};
+          callbacksRef.current.onTransactionError(resp.message, result);
         }
         break;
     }
@@ -179,6 +196,7 @@ export function usePOS(callbacks: POSCallbacks) {
         wsRef.current = null;
 
         // Auto-reconnect
+        addLog('Auto-reconnecting in 3s...');
         reconnectTimerRef.current = setTimeout(connect, 3000);
       };
 
@@ -195,6 +213,7 @@ export function usePOS(callbacks: POSCallbacks) {
       };
     };
 
+    connectRef.current = connect;
     connect();
 
     return () => {
@@ -212,7 +231,9 @@ export function usePOS(callbacks: POSCallbacks) {
   // Send transaction command
   const sendTransaction = useCallback(
     async (command: 'SALE' | 'REFUND', amount: string, orderNo?: string) => {
-      const message = { command, amount, order_no: orderNo };
+      const generated =
+        orderNo && orderNo.trim().length > 0 ? orderNo.trim() : uuid();
+      const message = { command, amount, order_no: generated };
       addLog(`Sending ${command}: $${(parseInt(amount) / 100).toFixed(2)}`);
 
       if (isElectron()) {
@@ -237,7 +258,7 @@ export function usePOS(callbacks: POSCallbacks) {
 
   // Send abort command
   const sendAbort = useCallback(async () => {
-    addLog('Requesting abort...');
+    addLog('Requesting Transaction Abort...');
     if (isElectron()) {
       await window.electronAPI.ws.send({ command: 'ABORT' });
     } else if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -247,24 +268,44 @@ export function usePOS(callbacks: POSCallbacks) {
 
   // Send reconnect command
   const sendReconnect = useCallback(async () => {
-    addLog('Requesting device reconnect...');
     if (isElectron()) {
-      await window.electronAPI.ws.send({ command: 'RECONNECT' });
-    } else if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const status = await window.electronAPI.ws.status();
+      if (status.success && status.data?.connected) {
+        addLog('Requesting Device Reconnect...');
+        await window.electronAPI.ws.send({ command: 'RECONNECT' });
+      } else {
+        addLog('Attempting Server Reconnect...');
+        await window.electronAPI.ws.connect();
+      }
+      return;
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      addLog('Requesting Device Reconnect...');
       wsRef.current.send(JSON.stringify({ command: 'RECONNECT' }));
+    } else {
+      addLog('Attempting Server Reconnect...');
+      connectRef.current();
     }
   }, [addLog]);
 
   // Restart Go Server
   const sendRestart = useCallback(async () => {
-    addLog('Restarting Go Server...');
     if (isElectron()) {
+      addLog('Requesting Server Restart...');
       const result = await window.electronAPI.goServer.restart();
       if (!result.success) {
         addLog(`Restart failed: ${result.error}`);
       }
+      return;
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      addLog('Requesting Server Restart...');
+      wsRef.current.send(JSON.stringify({ command: 'RESTART' }));
     } else {
-      addLog('Restart not available in browser mode');
+      addLog('Attempting Server Reconnect...');
+      connectRef.current();
     }
   }, [addLog]);
 
@@ -285,4 +326,16 @@ export function usePOS(callbacks: POSCallbacks) {
     sendRestart,
     requestStatus,
   };
+}
+
+function uuid(): string {
+  // Use Web Crypto if available; fallback to RFC4122 v4 format with Math.random
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }

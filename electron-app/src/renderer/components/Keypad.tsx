@@ -21,7 +21,7 @@ export const Keypad = ({
   return (
     <div className="grid grid-cols-3 gap-3 w-full max-w-sm mx-auto">
       {/* Amount Display */}
-      <div className="col-span-3 mb-3 p-5 bg-zinc-900 rounded-xl border border-zinc-800 text-right">
+      <div className="col-span-3 mb-3 p-5 bg-surface rounded-xl border border-zinc-800 text-right">
         <span className="text-zinc-500 text-2xl mr-1">$</span>
         <span
           className={clsx(

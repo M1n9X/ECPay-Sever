@@ -49,7 +49,7 @@ function App() {
   const { orders, addOrder, markRefunded } = useOrders();
 
   // Track processed transactions to avoid duplicates
-  const processedApprovalRef = useRef<string | null>(null);
+  const processedTxRef = useRef<string | null>(null);
 
   // POS callbacks
   const posCallbacks: POSCallbacks = useMemo(
@@ -88,11 +88,23 @@ function App() {
   // Handle order saving on success
   useEffect(() => {
     if (state.appState === "SUCCESS" && state.lastResult) {
-      const currentApproval = state.lastResult.ApprovalNo ?? null;
-      if (processedApprovalRef.current === currentApproval) {
+      const txKey = [
+        state.lastResult.TransType,
+        state.lastResult.Amount,
+        state.lastResult.ApprovalNo,
+        state.lastResult.OrderNo,
+        state.lastResult.MerchantOrderNo,
+        state.lastResult.InvoiceNo,
+        state.lastResult.ReferenceNo,
+        state.lastResult.CardNo,
+      ]
+        .map((v) => v ?? "")
+        .join("|");
+
+      if (processedTxRef.current === txKey) {
         return;
       }
-      processedApprovalRef.current = currentApproval;
+      processedTxRef.current = txKey;
 
       const orderData = {
         type: (state.lastResult.TransType === "01" ? "SALE" : "REFUND") as
@@ -159,7 +171,6 @@ function App() {
 
   const handleDismiss = useCallback(() => {
     dismiss();
-    processedApprovalRef.current = null;
   }, [dismiss]);
 
   // Derived values for display
@@ -256,7 +267,7 @@ function App() {
           </div>
 
           {/* Tabs */}
-          <div className="flex p-1 bg-zinc-900 rounded-xl mb-4 border border-zinc-800">
+          <div className="flex p-1 bg-surface rounded-xl mb-4 border border-zinc-800">
             <button
               onClick={() => handleTabChange("SALE")}
               disabled={!canInputForm}
@@ -300,7 +311,7 @@ function App() {
                 disabled={!canInputForm}
                 placeholder="Enter Order No"
                 className={clsx(
-                  "w-full mt-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm",
+                  "w-full mt-1 bg-surface border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-mono text-sm",
                   !canInputForm && "opacity-50 cursor-not-allowed"
                 )}
               />
@@ -416,7 +427,7 @@ function App() {
                   </span>
                 </p>
 
-                <div className="w-full bg-zinc-900 rounded-xl p-4 text-left space-y-2 mb-6 text-sm">
+                <div className="w-full bg-surface rounded-xl p-4 text-left space-y-2 mb-6 text-sm">
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Amount</span>
                     <span className="font-mono">
@@ -429,7 +440,20 @@ function App() {
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Order No</span>
                     <span className="font-mono text-xs">
-                      {state.lastResult?.OrderNo}
+                      {state.lastResult?.MerchantOrderNo ||
+                        state.lastResult?.OrderNo}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Invoice No</span>
+                    <span className="font-mono text-xs">
+                      {state.lastResult?.InvoiceNo}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Reference No</span>
+                    <span className="font-mono text-xs">
+                      {state.lastResult?.ReferenceNo}
                     </span>
                   </div>
                   <div className="flex justify-between">

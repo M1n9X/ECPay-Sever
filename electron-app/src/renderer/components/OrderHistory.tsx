@@ -28,7 +28,7 @@ export const OrderHistory = ({ orders, onRefund }: OrderHistoryProps) => {
               ? "bg-orange-500/5 border-orange-500/20"
               : order.refunded
               ? "bg-zinc-800/50 border-zinc-700 opacity-60"
-              : "bg-zinc-900 border-zinc-800 hover:border-zinc-700"
+              : "bg-surface border-zinc-800 hover:border-zinc-700"
           )}
         >
           <div className="flex items-center justify-between">
