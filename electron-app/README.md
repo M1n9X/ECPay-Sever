@@ -100,6 +100,16 @@ npm run build:go:win
 npm run dev
 ```
 
+**与 mock-pos-tcb 联调（推荐）**
+
+在开发模式下，Electron 默认使用 `tcp://localhost:9999` 作为串口地址，
+可直接对接 `mock-pos-tcb`。确保已启动 mock：
+
+```bash
+cd ../mock-pos-tcb
+go run main.go
+```
+
 **方式二：手动启动各组件**
 
 ```bash
@@ -179,6 +189,10 @@ export const config = {
   goServer: {
     port: 8989,
     host: '127.0.0.1',
+    wsAddr: '127.0.0.1:8989',
+    serialPort: 'tcp://localhost:9999',
+    baudRate: 115200,
+    autoDetect: false,
     maxRestarts: 5,
     restartDelay: 3000,
     startupTimeout: 10000,
@@ -198,6 +212,19 @@ export const config = {
   },
 };
 ```
+
+### 环境变量（Main Process）
+
+- `TCB_SERIAL_PORT`: 指定串口或 TCP 地址（如 `COM3`、`/dev/ttyUSB0`、`tcp://localhost:9999`）。
+- `TCB_AUTODETECT`: `true/false`，是否启用自动扫描（默认关闭）。
+- `TCB_BAUD`: 串口波特率（默认 `115200`）。
+- `TCB_WS_HOST` / `TCB_WS_PORT`: Go Server 监听地址（默认 `127.0.0.1:8989`）。
+- `TCB_WS_ADDR`: 直接指定监听地址（如 `:8989` 或 `127.0.0.1:8989`）。
+- `TCB_WS_URL`: 覆盖 WebSocket 连接 URL（默认 `ws://127.0.0.1:8989/ws`）。
+
+### 环境变量（Renderer / 浏览器开发模式）
+
+- `VITE_TCB_WS_URL`: 浏览器直连的 WebSocket URL（默认 `ws://127.0.0.1:8989/ws`）。
 
 ## 安全性
 

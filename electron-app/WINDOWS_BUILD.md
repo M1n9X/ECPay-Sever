@@ -64,4 +64,5 @@ build-windows.bat [--debug] [--arm64] [--all] [--clean]
 
 **Go 服务器无法启动**：
 1. 检查串口连接
-2. 查看日志：`%APPDATA%\ECPay POS\logs\`
+2. 设置 `TCB_SERIAL_PORT`（如 `COM3`）或启用 `TCB_AUTODETECT=true`
+3. 查看日志：`%APPDATA%\ECPay POS\logs\`

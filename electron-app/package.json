@@ -61,12 +61,12 @@
       {
         "from": "resources/bin/",
         "to": "bin/",
-        "filter": ["**/*"]
+        "filter": ["tcb-server*"]
       }
     ],
     "asar": true,
     "asarUnpack": [
-      "resources/bin/**"
+      "resources/bin/tcb-server*"
     ],
     "win": {
       "target": [

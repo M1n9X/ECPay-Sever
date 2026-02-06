@@ -53,6 +53,8 @@ const isElectron = (): boolean => {
 };
 
 const MAX_LOGS = 50;
+const DIRECT_WS_URL =
+  import.meta.env.VITE_TCB_WS_URL ?? 'ws://127.0.0.1:8989/ws';
 
 // ============ Hook ============
 
@@ -162,8 +164,8 @@ export function usePOS(callbacks: POSCallbacks) {
     const connect = () => {
       if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-      addLog('Connecting to ws://localhost:8989/ws');
-      const socket = new WebSocket('ws://localhost:8989/ws');
+      addLog(`Connecting to ${DIRECT_WS_URL}`);
+      const socket = new WebSocket(DIRECT_WS_URL);
       wsRef.current = socket;
 
       socket.onopen = () => {

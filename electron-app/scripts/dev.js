@@ -40,13 +40,18 @@ tsc.on('close', (code) => {
   // Wait a bit for Vite to start, then launch Electron
   setTimeout(() => {
     console.log('\n⚡ Starting Electron...');
+    const electronEnv = {
+      ...process.env,
+      NODE_ENV: 'development',
+    };
+    if (electronEnv.ELECTRON_RUN_AS_NODE) {
+      delete electronEnv.ELECTRON_RUN_AS_NODE;
+      console.log('ℹ️  ELECTRON_RUN_AS_NODE detected and cleared for dev launch');
+    }
     const electron = spawn(npm, ['run', 'start'], {
       stdio: 'inherit',
       shell: true,
-      env: {
-        ...process.env,
-        NODE_ENV: 'development',
-      },
+      env: electronEnv,
     });
 
     electron.on('close', () => {

@@ -32,6 +32,9 @@ export interface WsMessage {
   command?: string;
   amount?: string;
   order_no?: string;
+  trans_type?: string;
+  host_id?: string;
+  fields?: Record<string, string>;
   [key: string]: unknown;
 }
 

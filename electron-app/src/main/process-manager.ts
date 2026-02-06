@@ -85,8 +85,9 @@ export class ProcessManager extends EventEmitter {
 
     this.isShuttingDown = false;
     const serverPath = this.getServerPath();
-    
-    logger.info('Starting Go Server', { path: serverPath });
+    const args = this.getServerArgs();
+
+    logger.info('Starting Go Server', { path: serverPath, args });
 
     // Verify executable exists
     if (!fs.existsSync(serverPath)) {
@@ -96,7 +97,7 @@ export class ProcessManager extends EventEmitter {
     }
 
     // Spawn the process
-    this.goServer = spawn(serverPath, [], {
+    this.goServer = spawn(serverPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
       cwd: path.dirname(serverPath),
@@ -194,11 +195,11 @@ export class ProcessManager extends EventEmitter {
    * Wait for Go Server to be ready (port is listening)
    */
   private async waitForReady(): Promise<void> {
-    const { host, port, startupTimeout } = config.goServer;
+    const { host, healthHost, port, startupTimeout } = config.goServer;
     const start = Date.now();
 
     while (Date.now() - start < startupTimeout) {
-      const isReady = await this.checkPort(host, port);
+      const isReady = await this.checkPort(healthHost ?? host, port);
       if (isReady) {
         return;
       }
@@ -304,5 +305,27 @@ export class ProcessManager extends EventEmitter {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private getServerArgs(): string[] {
+    const args: string[] = [];
+
+    if (config.goServer.wsAddr) {
+      args.push('-ws', config.goServer.wsAddr);
+    }
+
+    if (config.goServer.serialPort) {
+      args.push('-port', config.goServer.serialPort);
+    }
+
+    if (config.goServer.baudRate) {
+      args.push('-baud', String(config.goServer.baudRate));
+    }
+
+    if (config.goServer.autoDetect) {
+      args.push('-autodetect');
+    }
+
+    return args;
   }
 }
