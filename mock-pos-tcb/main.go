@@ -571,7 +571,7 @@ func buildResponse(reqPacket []byte, declined bool) ([]byte, diagInfo) {
 	}
 	approvalNo := strings.TrimSpace(fields["Approval_No"])
 	if approvalNo == "" {
-		approvalNo = fmt.Sprintf("%06d", rand.Intn(1000000))
+		approvalNo = transTime
 	}
 	batchNo := strings.TrimSpace(fields["Batch_Number"])
 	if batchNo == "" {
@@ -583,8 +583,20 @@ func buildResponse(reqPacket []byte, declined bool) ([]byte, diagInfo) {
 	}
 	cardNo := strings.TrimSpace(fields["Card_No"])
 	if cardNo == "" {
-		cards := []string{"4311-****-****-1234", "5425-****-****-5678", "3530-****-****-9012"}
+		cards := []string{
+			"524689******0179",
+			"431112******1234",
+			"542531******5678",
+			"353012******9012",
+		}
 		cardNo = cards[rand.Intn(len(cards))]
+	}
+	cardType := strings.TrimSpace(fields["CardType"])
+	if cardType == "" {
+		cardType = strings.TrimSpace(fields["Card_Type"])
+	}
+	if cardType == "" {
+		cardType = "2"
 	}
 	terminalID := "00010001"
 	merchantID := "006006111110001"
@@ -836,6 +848,8 @@ func buildResponse(reqPacket []byte, declined bool) ([]byte, diagInfo) {
 		if config.ReturnCard {
 			writeFieldByName(data, layout, "Card_No", cardNo)
 		}
+		writeFieldByName(data, layout, "CardType", cardType)
+		writeFieldByName(data, layout, "Card_Type", cardType)
 		if config.RequireBatchOrCancel && transType != "27" {
 			writeFieldByName(data, layout, "Batch_Number", batchNo)
 			writeFieldByName(data, layout, "Cancel Debt Number", cancelDebt)

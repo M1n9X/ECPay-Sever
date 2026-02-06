@@ -25,7 +25,8 @@ Mock 預設回傳以下欄位（若版型包含）：
 - `Invoice_No`
 - `Reference_No`
 - `Approval_No`
-- `Card_No`（遮掩卡號）
+- `Card_No`（遮掩卡號，6+6+4 格式）
+- `CardType`（預設 `2`）
 - `Trans_Date` / `Trans_Time`
 - `ECR_Response_Code`
 - `Host_Response_Code`
@@ -34,6 +35,8 @@ Mock 預設回傳以下欄位（若版型包含）：
 
 補充：
 - `Reference_No` 預設以 `Trans_Date + Trans_Time` 組成（12 位），不與 `Invoice_No` 共用。  
+- `Card_No` 預設為「6 位 + 6 個 * + 4 位」格式，無連字符，右側補空白至欄位長度。  
+- `Approval_No` 若未提供，預設使用 `Trans_Time`。  
 
 ## 3. 可選開關（非 PDF 強制）
 
